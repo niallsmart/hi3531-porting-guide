@@ -163,8 +163,9 @@ reimplement the protocol.
 
 ## Alarm I/O
 
-The chassis label specifies **4 alarm channels**. Three "HUI KE" relays
-(K1, K3, K4) are on the top surface of the board, alongside a buzzer (BZ1).
+The chassis label specifies **4 alarm channels**. Four "HUI KE" HK4100F-DC5V-SHG
+relays (3 A at 250 V AC / 30 V DC) are on the top surface of the board,
+alongside a buzzer (BZ1).
 
 ### Rear terminal block
 
@@ -177,14 +178,8 @@ the RS485 bus together (`pcb/connector_block.png`). Silkscreen, left to right:
 | Lower | `COM1` `NO1` `COM2` `NO2` — **ALARM OUT**, then `1` `2` `3` `4` — **ALARM IN** |
 
 So the alarm side is **four relay outputs** as common/normally-open pairs
-(`COM1`–`NO1` … `COM4`–`NO4`) and **four alarm inputs**.
-
-> **The fourth relay is unaccounted for.** The connector exposes four `COM`/`NO`
-> pairs but only three relays are fitted, and the underside has no room for
-> another. Where `COM2`/`NO2` goes is unknown — the pair may be unconnected, or
-> switched by something other than a relay. The reference designators skip `K2`,
-> and no `K2` footprint is visible on the top surface. Worth resolving before
-> anyone counts on four switched outputs.
+(`COM1`–`NO1` … `COM4`–`NO4`) and **four alarm inputs**, one relay per output
+pair.
 
 The RS485 terminals on the upper row belong to UART2, not to the alarm
 subsystem; see [05-uart-console.md](05-uart-console.md#terminal-block).

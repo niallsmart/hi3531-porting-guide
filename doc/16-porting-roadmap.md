@@ -107,9 +107,7 @@ Ranked by how much they would change the work.
 6. **The AT89S52 front-panel protocol.** Only matters if the front panel is
    wanted.
 7. **The alarm I/O pin assignments.** The rear block exposes four relay outputs
-   and four alarm inputs, but which SoC GPIOs drive them is unknown. Related:
-   only three relays are fitted for four `COM`/`NO` pairs, and what switches the
-   fourth is unresolved. See
+   and four alarm inputs, but which SoC GPIOs drive them is unknown. See
    [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#alarm-io).
 
 ## Quick reference

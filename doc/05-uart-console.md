@@ -60,7 +60,7 @@ Two functions in the vendor application, both over the same bus:
 
 ### Transceiver
 
-`U34`, an 8-pin SOIC between the alarm relays (K1/K3/K4) and the rear terminal
+`U34`, an 8-pin SOIC between the alarm relays and the rear terminal
 block, marked `SP490EE` / `1249L` / `C23819`.
 
 | Property | Value |

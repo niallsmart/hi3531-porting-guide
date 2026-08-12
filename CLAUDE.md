@@ -11,6 +11,8 @@ Documentation should be stored as markdown in the doc/ subfolder. The README.md 
 
 You don't need to record the history of your investigations and research in the documentation, or a Changelog as you refined your understanding. Just state the final conclusions and what you know at the end.
 
+Store local copies of any relevant datasheets in datasheets/
+
 # Reference Assets
 
 You have access to these assets:

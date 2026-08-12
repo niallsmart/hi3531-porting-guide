@@ -54,7 +54,7 @@ Warranty void if removed.
 | Channels | **4CH 1080P realtime** | The four BT.1120 inputs at 1920x1080 and the `-i 4hd` variant selection |
 | Video out | **HDMI** | The SoC's integrated HDMI transmitter |
 | Audio | **4 inputs** | The audio path in [13-audio.md](13-audio.md) |
-| Alarm | **4 channels** | Four `COM`/`NO` output pairs and four inputs on the rear terminal block, but only three relays (K1/K3/K4) are fitted — see [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#alarm-io) |
+| Alarm | **4 channels** | Four relays on the board and four `COM`/`NO` output pairs plus four inputs on the rear terminal block — see [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#alarm-io) |
 | Power | **DC 12 V** | — |
 | Serial | `812 1309 95 X 0058` | `1309` matches the PCB date code `20130921` and UL date code `3813` |
 | UPC | `8 12009 01917 0` | — |
@@ -72,7 +72,7 @@ string stored in the SPI-NOR parameter block — see
 [04-flash-storage.md](04-flash-storage.md).
 
 Also visible on the overview photograph: the RTC coin cell (BT1), a buzzer
-(BZ1), three "HUI KE" relays (K1/K3/K4) for alarm outputs, the Ethernet
+(BZ1), four "HUI KE" relays for alarm outputs, the Ethernet
 magnetics module (`PM6C-1001A 1000BASE-T`, U6), a 2x10 header (CON1), the
 serial console header (J3), and **ten SATA connector footprints**
 (`SATA1`–`SATA10`) of which only two are populated.

@@ -9,7 +9,8 @@ Where everything came from, and how to reproduce or extend it.
 | `Hi3531_V100R001C01SPC0D1/` | HiSilicon SDK, 2.5 GB |
 | `rootfs/` | Export of the DVR filesystem, 49 MB |
 | `backups/2026-08-03/` | SPI-NOR, NAND and filesystem images |
-| `pcb/` | Photographs of the board, top surface only |
+| `pcb/` | Photographs of the board and rear connectors |
+| `datasheets/` | Local copies of datasheets for identified parts |
 | `doc/` | This documentation |
 
 ### SDK layout
@@ -212,17 +213,32 @@ read twice and compared, with a second copy on the Pi at
 ## PCB photographs
 
 `pcb/` contains a 27 MB overview (`PCB.png`, also `PCB.heic`) plus labelled
-close-ups:
+close-ups and connector shots:
 
 ```
 U1 Nanya.jpg                    U2 Nanya.jpeg
 U16 TI PN521.jpeg               U19 nextchip NVP 1104B.jpeg
 U32 Atmel AT89S52.jpeg          U67 RealTek RTL8211CL.jpeg
 U88 JMB321.jpeg                 U91 Lattice LFE3-17EA.jpeg
+connector_block.png             label.png
 ```
+
+`connector_block.png` is the rear alarm/RS485 terminal block, decoded in
+[05-uart-console.md](05-uart-console.md#terminal-block) and
+[10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#alarm-io).
 
 **Top surface only.** See [15-product-identity.md](15-product-identity.md) for
 the component inventory and what remains unlocated.
+
+## Datasheets
+
+`datasheets/` holds local copies for parts identified on the board:
+
+```
+NVP1104B Overview.pdf                  4-channel analog video decoder (U19)
+SP490E SP491E RS-485 Transceiver.pdf   RS485 transceiver (U34)
+SGM9119 Video Filter Driver.pdf        SD video filter driver (U17)
+```
 
 ## Raspberry Pi
 
