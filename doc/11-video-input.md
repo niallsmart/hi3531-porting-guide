@@ -8,14 +8,14 @@ capture path work on a modern kernel — see
 ## Signal path
 
 ```
-4x analog camera inputs (BNC)
+4x analog CVBS camera inputs (BNC)
         |
         v
-  Nextchip decoder  (U19, I2C 0x60, chip ID 0x77)
-        |  ITU-R BT.656 / BT.1120 digital video
+  Nextchip NVP1104B  (U19, I2C 0x60, chip ID 0x77)
+        |  4x ITU-R BT.656, 8-bit 4:2:2, 27/54/108 MHz
         v
   Lattice ECP3 FPGA  (U91, LFE3-17EA)
-        |  4x BT.1120 streams, 1920x1080
+        |  BT.1120, byte-lane multiplexed
         v
   Hi3531 VIU  (video input unit, IRQ 90)
         |
@@ -23,17 +23,51 @@ capture path work on a modern kernel — see
   VPSS -> VENC (H.264) -> disk
 ```
 
+**The format changes across the FPGA.** The decoder emits BT.656; the SoC is
+configured for BT.1120. Converting and aggregating between the two is the
+FPGA's job — see below.
+
 ## Video decoder
 
 | Property | Value |
 |---|---|
 | Reference designator | U19 |
 | Marking on package | **Nextchip NVP1104B** (from `pcb/U19 nextchip NVP 1104B.jpeg`) |
+| Function | Combined 4-channel video decoder **and** 4-channel PCM voice codec |
 | I²C address | `0x60` |
 | Chip ID read back | `0x77` |
 | Driver module | `ncdecoder.ko`, version `201301231903` |
 | Device node | `/dev/nvp1114adev` |
-| Channels | 4 |
+| Channels | 4 video in, 4 audio in, 1 audio out |
+| Supply | 3.3 V I/O, 1.8 V core |
+| Power | ~0.4 W typical |
+
+The audio half is documented in [13-audio.md](13-audio.md).
+
+### Video capabilities
+
+From `datasheets/NVP1104B Overview.pdf`:
+
+| Property | Value |
+|---|---|
+| Standards | NTSC-M/J/4.43, PAL-B/G/H/I/D/K/L/M/N/Nc/60 |
+| Inputs | 4 × CVBS, 10-bit 4-channel ADC |
+| Output | 4 × 4:2:2 8-bit **ITU-R BT.656** |
+| Output clocks | 27 MHz / 54 MHz / 108 MHz |
+| Processing | On-chip analog AGC and clamp; 3H/5H 2-D adaptive comb filter and notch filter; programmable vertical peaking, brightness, contrast, saturation, hue; white peak detection and peak AGC; colour transient improvement; PAL colour compensation |
+
+Four output multiplexer modes are available:
+
+| Port | Mode |
+|---|---|
+| `VOD1` | 27 MHz CCIR656, single channel |
+| `VOD2` | 54 MHz, 2-channel mux |
+| `VOD3` | 108 MHz D1, 4-channel mux — **requires an external 108 MHz oscillator** |
+| `VOD4` | 54 MHz CIF, 4-channel mux |
+
+Which mode this board uses has not been determined; it is set by
+`ncdecoder.ko` over I²C. The presence or absence of a 108 MHz oscillator near
+U19 would settle whether `VOD3` is available.
 
 ### Naming discrepancy
 
@@ -60,17 +94,27 @@ warning: nvp1108 0x64 i2c_read err !!!
 warning: nvp1108 0x66 i2c_read err !!!
 ```
 
-The driver probes four I²C addresses because the family supports up to four
-cascaded decoders for 16 channels. **Only one chip responds**, consistent with
-a 4-channel unit — and with the model number LTD**2704**XE-P and the vendor's
+The driver probes four I²C addresses because the part supports **cascade mode,
+up to 4 chips**, giving 16-channel recording, mixing output and playback — the
+datasheet states this explicitly. **Only one chip responds**, consistent with a
+4-channel unit, with the model number LTD**2704**XE-P, and with the vendor's
 internal product string `2704XD_P`.
 
 Take the package marking (NVP1104B) as authoritative for the hardware, and
 treat `nvp1108`/`nvp1114a` as driver-family names.
 
-> **No public datasheet for the NVP1104B was located.** Nextchip does not
-> publish these openly. Without it, the register-level programming of the
-> decoder is only recoverable by reverse-engineering `ncdecoder.ko`.
+> **Only an overview document is available**, in `datasheets/`. It gives
+> features, interfaces, block and application diagrams, but **no register
+> map**. Programming the decoder still requires either the full datasheet,
+> which Nextchip does not publish openly, or reverse-engineering
+> `ncdecoder.ko`.
+
+> **Package discrepancy.** The overview specifies the NVP1104 as 100-TQFP,
+> 12 × 12 mm, 0.4 mm pitch. The PCB silkscreen around U19 numbers pins at 32,
+> 33, 64, 65, 96 and 97, which indicates a **128-pin** package with 32 pins per
+> side. The fitted part is the `B` variant, so it likely differs from the base
+> NVP1104 the overview describes. Treat pin-level detail from that document
+> with caution; the functional description is unaffected.
 
 ### Observed configuration
 
@@ -95,13 +139,39 @@ family member.
 | Family | LatticeECP3, 17K LUT, low-cost FPGA with SERDES |
 | Control interfaces | Bit-banged I²C (`gpio_fpga_i2c_read`/`_write` in `gpioi2c.ko`) and JTAG (`fpga_jtag.ko`) |
 
-### What is observable
+### Its role
 
-The FPGA sits between the decoder and the SoC. Its role is inferred from the
-VIU configuration rather than documented: the SoC receives **four independent
-BT.1120 streams at 1920x1080**, which a 4-channel D1/960H analog decoder cannot
-produce directly. The FPGA is therefore performing format conversion, scaling
-and/or multiplexing to present the decoder's output in the form the VIU expects.
+The FPGA bridges a genuine format mismatch between the two chips either side of
+it:
+
+| | Produces / expects |
+|---|---|
+| NVP1104B output | 4 × ITU-R **BT.656**, 8-bit 4:2:2, 27/54/108 MHz |
+| Hi3531 VIU input | **BT1120S**, 1Mux, 1920x1080, `sp420` |
+
+BT.656 is an 8-bit standard-definition interface; BT.1120 is the 16-bit
+high-definition one. The decoder cannot emit BT.1120, and the VIU is not
+configured to accept BT.656, so the FPGA must convert between them — and the
+byte-lane component masks in the VIU configuration show how the result is
+packed:
+
+```
+ Dev   ComMsk0   ComMsk1
+   0  ff000000    ff0000
+   2      ff00        ff
+```
+
+Devices 0 and 2 take different byte lanes of the same wider bus, which is what
+carrying two 8-bit BT.656 streams inside one 16-bit BT.1120 link looks like.
+The same pattern repeats for devices 4 and 6.
+
+So the FPGA is doing format conversion and channel aggregation. Whether it also
+scales is unclear — the VIU capture geometry is 1920x1080 while the decoder's
+sources are D1 or CIF, so either the FPGA upscales, or the 1920x1080 window is
+simply a container for multiplexed lower-resolution streams. The latter is more
+likely for a DVR of this class, but this has not been confirmed.
+
+Two control paths exist:
 
 Two control paths exist:
 

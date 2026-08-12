@@ -2,33 +2,65 @@
 
 Documented at wiring level per the agreed scope.
 
-## Codec
+## The codec is inside the video decoder
+
+**There is no separate audio codec on this board.** Audio is handled by the
+**Nextchip NVP1104B at U19** — the same part that decodes the video. The
+NVP1104 is a combined *4-channel video decoder and 4-channel PCM voice codec*,
+and the vendor uses both halves.
+
+From `datasheets/NVP1104B Overview.pdf`:
 
 | Property | Value |
 |---|---|
-| Part | **Texas Instruments TLV320AIC31** |
-| Driver module | `tlv_320aic31.ko` (present in both the SDK and the DVR filesystem) |
-| Interface | I²S / PCM via the SoC's SIO block |
-| Control bus | I²C (bit-banged, presumed) |
+| Codec | 4-channel PCM voice codec, integrated |
+| Capture | **4-channel voice record** |
+| Playback | **1-channel playback** |
+| Encodings | Linear PCM (8/16 kHz, 8/16-bit); G.711 A-law / µ-law compand/expand (8/16 kHz, 8-bit) |
+| Voice band | 300 Hz – 3400 Hz |
+| Input gain | 0 – 21 dB, 3 dB steps |
+| Output gain | −6 – +6 dB, 0.75 dB steps |
+| Other | Input mixing, digital volume, mute detection |
+| Digital interface | **SSP / DSP / I²S**, master or slave |
+| Control | I²C — address `0x60` on this board |
 
-The TLV320AIC31 is a stereo audio codec with an integrated headphone/speaker
-amplifier, commonly paired with HiSilicon DVR SoCs.
+The signal path, per the datasheet's own 4-channel DVR application diagram,
+matches this board exactly:
 
-> **Not used on this board.** In the active load script
-> `rootfs/mtd/modules/load3531`, both the insertion and removal lines are
-> commented out:
->
-> ```sh
-> #insmod extdrv/tlv_320aic31.ko > /dev/null
-> ...
-> #rmmod tlv_320aic31
-> ```
->
-> and `tlv_320aic31` does not appear in `/proc/modules`. No TI audio codec was
-> identified in the PCB photos either. The audio path was nonetheless active
-> (see below), so the codec function is coming from somewhere else — most
-> likely the Nextchip decoder's integrated audio ADCs for capture, and the
-> SoC's own DACs for playback.
+```
+AUDIO1..4 -> AIN_01..04 -> ADC -> decimation filter -> PCM engine
+                                                        |
+                              ADATA_REC, ACLK_REC, ASYNC_REC  (record)
+                              ADATA_PB,  ACLK_PB,  ASYNC_PB   (playback)
+                                                        |
+                                                     Hi3531 SIO4
+VOICE_OUT <- AOUT <- DAC <- interpolation filter
+```
+
+Four record channels and one playback channel is exactly what the runtime log
+reports:
+
+```
+drv:set playback audio channel ok
+```
+
+and matches the chassis label's `4 Audio`.
+
+### The TLV320AIC31 is not fitted
+
+The SDK ships `tlv_320aic31.ko` for a TI stereo codec and the module is present
+in the filesystem, but in the active load script
+`rootfs/mtd/modules/load3531` both the insertion and removal lines are
+commented out:
+
+```sh
+#insmod extdrv/tlv_320aic31.ko > /dev/null
+...
+#rmmod tlv_320aic31
+```
+
+It does not appear in `/proc/modules`, and no TI audio codec is visible in the
+PCB photographs. It is dead code retained for sibling board variants.
 
 ## SoC audio blocks
 
@@ -80,52 +112,38 @@ The SoC provides five serial audio ports (SIO0–SIO4) across
 `DOUT` as well as a `DIN`, i.e. the only bidirectional port. See
 [19-pinmux-map.md](19-pinmux-map.md).
 
-## Channel count
-
-The chassis label specifies **4 audio inputs** alongside the four video
-channels (`4CH 1080P Realtime H.264 DVR, HDMI, 4 Audio, 4 Alarm, DC 12V`).
-
-That is a useful constraint: a single bidirectional I²S port (SIO4) carries
-four capture channels, so the four inputs are multiplexed onto it rather than
-each having its own port. Nextchip NVP11xx decoders integrate audio ADCs with
-exactly this arrangement — audio sampled alongside the video channels and
-serialised out on one bus — which fits the absence of any separate audio codec
-on this board.
+Four record channels sharing one bidirectional port is consistent: the codec
+multiplexes them onto a single serial stream rather than giving each its own
+bus.
 
 ## What is not known
 
-- **The I²S configuration** — sample rate, bit depth, master/slave, frame
-  format. The vendor MPP stack configures this internally and it was not
-  dumped.
-- **Whether the four audio inputs come through the NVP1104B** or from some
-  other part. The reasoning above is inference from the channel count and the
-  single SIO port, not a traced signal path. The `NVP1104B Overview.pdf` in
-  `datasheets/` would settle it.
-- **The physical connections** — how many audio inputs the DVR exposes, whether
-  the analog audio for each camera channel goes through the codec or through
-  the video decoder (Nextchip NVP11xx parts often include audio ADCs, which
-  would make a separate codec unnecessary for capture).
-- **Whether audio capture is via the codec or the video decoder.** Given
-  `ncdecoder.ko` handles a 4-channel decoder and the driver includes
-  `drv:set playback audio channel`, the decoder may well carry the audio
-  inputs, with the TLV320AIC31 (if fitted) handling only output.
-
-Resolving these would need the NVP1104B datasheet, underside PCB photos, and
-tracing.
+- **The I²S framing actually used** — sample rate, bit depth, master or slave,
+  and which of the SSP/DSP/I²S modes the decoder is configured for. The part
+  supports 8 or 16 kHz at 8 or 16 bits, linear or G.711; which combination the
+  vendor selects is set by the MPP stack at runtime and was not dumped.
+- **The decoder's audio register map.** The overview document describes
+  features and interfaces, not registers. Programming the codec still requires
+  either the full NVP1104B datasheet or reverse-engineering `ncdecoder.ko`.
+- **Where the analog audio enters the chassis** and how the single playback
+  channel is routed to the outputs.
 
 ## Mainline support
 
-Mixed:
+Worse than it first appears, because the codec is not a standalone part:
 
-- **The codec has a mainline driver.** `sound/soc/codecs/tlv320aic31xx.c`
-  supports the AIC31 family via ASoC.
-- **The SoC side does not.** There is no mainline ASoC platform driver for the
-  Hi3531 SIO/AIO blocks. One would have to be written against the datasheet,
-  plus a machine driver to bind the two together.
+- **There is no mainline driver for the NVP1104B's codec**, and none is likely
+  — it is a surveillance-specific voice codec welded to a video decoder. The
+  `tlv320aic31xx` ASoC driver in mainline is irrelevant here, since that part
+  is not fitted.
+- **The SoC side has no mainline driver either.** No ASoC platform driver
+  exists for the Hi3531 SIO/AIO blocks; one would have to be written against
+  the datasheet, plus a machine driver to bind the two ends together.
 
-That is a real but bounded piece of work — an ASoC platform driver for a
-straightforward I²S controller is a well-trodden pattern. It is, however,
-entirely optional for a server.
+So enabling audio means writing *both* ends: an ASoC platform driver for the
+SoC's SIO4 port, and a codec driver for the NVP1104B's PCM engine. The first is
+a well-trodden pattern; the second needs documentation that is not public.
+Neither is on the critical path for a server.
 
 ## Assessment
 
