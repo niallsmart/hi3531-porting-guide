@@ -46,7 +46,7 @@ CPU, memory and UART are equally conventional.
 | 02 | [Memory Map and DRAM](02-memory-map.md) | Two DDR controllers, the 224 MB/MMZ split, how to reclaim the memory |
 | 03 | [Boot Chain and U-Boot](03-boot-chain.md) | Boot sequence, environment, available commands, TFTP workflow |
 | 04 | [Flash Storage](04-flash-storage.md) | SPI-NOR and NAND, partition layout, kernel image, backups |
-| 05 | [UART and Serial Console](05-uart-console.md) | Four PL011s, console setup, physical access |
+| 05 | [UART and Serial Console](05-uart-console.md) | Four PL011s, console setup, physical access, rear-panel RS485 |
 | 06 | [Ethernet](06-ethernet.md) | DWMAC1000, RTL8211CL PHY, MAC address, TOE bypass |
 | 07 | [SATA and Disk Storage](07-sata-storage.md) | AHCI, JMB321 port multiplier, the 1 TB disk, expansion capacity |
 | 08 | [USB](08-usb.md) | EHCI and OHCI, class drivers, PHY glue |

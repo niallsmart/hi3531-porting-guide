@@ -92,8 +92,8 @@ Ranked by how much they would change the work.
    confirming the pinmux and GPIO detail derived here from the `pinctrl_*.sh`
    scripts. See [15-product-identity.md](15-product-identity.md) for search
    terms.
-2. **Underside PCB photographs.** The SPI-NOR, NAND, RTC, regulators and a
-   possible fourth alarm relay are unlocated. These have to be taken directly —
+2. **Underside PCB photographs.** The SPI-NOR, NAND, RTC and regulators are
+   unlocated. These have to be taken directly —
    the unit has no FCC ID, so there is no FCC filing with internal photographs
    to fall back on (see [15-product-identity.md](15-product-identity.md)).
 3. **A flash programmer (CH341A + SOIC-8 clip) for recovery.** Not needed while
@@ -106,6 +106,11 @@ Ranked by how much they would change the work.
    implements. Only matters if the video capture path is ever revived.
 6. **The AT89S52 front-panel protocol.** Only matters if the front panel is
    wanted.
+7. **The alarm I/O pin assignments.** The rear block exposes four relay outputs
+   and four alarm inputs, but which SoC GPIOs drive them is unknown. Related:
+   only three relays are fitted for four `COM`/`NO` pairs, and what switches the
+   fourth is unresolved. See
+   [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#alarm-io).
 
 ## Quick reference
 
@@ -121,6 +126,7 @@ Where the answers to the most commonly needed questions live.
 | What does the board boot from? | SPI-NOR (`getinfo bootmode` → `spi`) | [03-boot-chain.md](03-boot-chain.md) |
 | Is the L2 cache a PL310? | No — HiSilicon L2 Cache V200, no mainline driver | [01-soc-overview.md](01-soc-overview.md#l2-cache-controller) |
 | Which timer drives the clock? | ARM SP804 at `0x20000000`, IRQ 35 — not the A9 TWD | [01-soc-overview.md](01-soc-overview.md#timers) |
+| Where does the rear RS485 go? | UART2 / `ttyAMA2` at `0x200A0000`, IRQ 42, 9600 | [05-uart-console.md](05-uart-console.md#rs485-rear-panel) |
 | Where is the FPGA bitstream? | `.rodata` of `fpga_jtag.ko`, a Lattice VME file | [11-video-input.md](11-video-input.md) |
 | Which external codecs are fitted? | None — no ADV7179, TLV320AIC31 or SiI9024 | [12-video-output.md](12-video-output.md) |
 

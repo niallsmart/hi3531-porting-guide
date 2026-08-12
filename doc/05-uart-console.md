@@ -6,19 +6,114 @@ Four ARM PL011 UARTs, all probed by the vendor kernel.
 
 | Device | Base | IRQ | Revision | Role |
 |---|---|---|---|---|
-| `ttyAMA0` | `0x20080000` | 40 | PL011 rev2 | System console — U-Boot and Linux |
-| `ttyAMA1` | `0x20090000` | 41 | PL011 rev2 | In use (11,268 interrupts at capture) |
-| `ttyAMA2` | `0x200A0000` | 42 | PL011 rev2 | Registered, zero interrupts |
-| `ttyAMA3` | `0x200B0000` | 43 | PL011 rev2 | Registered, no IRQ line active |
+| `ttyAMA0` | `0x20080000` | 40 | PL011 rev2 | System console — U-Boot and Linux, 115200 |
+| `ttyAMA1` | `0x20090000` | 41 | PL011 rev2 | Front-panel AT89S52 MCU, 9600 |
+| `ttyAMA2` | `0x200A0000` | 42 | PL011 rev2 | **Rear-panel RS485**, 9600 |
+| `ttyAMA3` | `0x200B0000` | 43 | PL011 rev2 | Registered, never opened, no IRQ line active |
 
 Console parameters: **115200 8N1**, set by `console=ttyAMA0,115200` on the
 kernel command line and `baudrate=115200` in the U-Boot environment.
 
-`ttyAMA1` is actively used — it had accumulated interrupts while `ttyAMA2` and
-`ttyAMA3` had none. The most likely peer is the Atmel AT89S52 microcontroller
-(U32) that handles the front panel; see
-[10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md). This has not been
-confirmed by tracing the PCB, and the protocol is unknown.
+The application process (`td3531`, PID 1033 at capture) holds both `ttyAMA1`
+(fd 7) and `ttyAMA2` (fd 119) open, each at **9600 8N1**. `ttyAMA1` carries
+steady traffic — over 52,000 interrupts — while `ttyAMA2` sits at zero, which
+is what an idle RS485 bus with nothing attached looks like.
+
+`ttyAMA1` is the front-panel MCU link. `libhi3531.so` references `/dev/ttyAMA1`
+alongside its `keyboard_realmcu_*` functions, and `LocalDevice.cpp` in `td3531`
+logs `Initial MCU fail` next to that path. The peer is the Atmel AT89S52 (U32);
+see [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md). The wire protocol is
+still unknown, and the link has not been traced on the PCB.
+
+## RS485 (rear panel)
+
+The rear panel carries an RS485 interface on the green screw-terminal block it
+shares with the alarm I/O. It is **UART2 / `/dev/ttyAMA2`**.
+
+| Property | Value |
+|---|---|
+| Device | `/dev/ttyAMA2` (major 204, minor 66) |
+| Base / IRQ | `0x200A0000`, IRQ 42 (DT SPI 10) |
+| Line settings | 9600 8N1 as configured by the vendor app |
+| TXD pin | `GPIO0_1`, mux register `0x200f0004` = 2 |
+| RXD pin | `GPIO2_4`, mux register `0x200f0050` = 2 |
+
+The pinmux script `pinctrl_4HD_hi3531.sh` has an explicit `#UART2` block setting
+both registers, and a live read of `0x200f0004` returns `0x00000002`, so the
+pins are muxed to UART2 on the running device. Neither `UART2_RTS` nor
+`UART2_CTS` is muxed — only TXD and RXD.
+
+### What uses it
+
+Two functions in the vendor application, both over the same bus:
+
+- **PTZ camera control.** `td3531` carries protocol classes for Pelco-P,
+  Visca and Minking, a `_ptz_serial_info` structure, and a "Serial Port"
+  configuration page in the web UI.
+- **An external RS485 keyboard.** `ExternalKeyboard.cpp` logs
+  `The external 485 keyboard is %s`, with a `CKeyTWOEM485` handler and a
+  `CProduct::External485KeyboardType()` accessor.
+
+`LocalDevice.cpp` initialises the two ports in sequence: the MCU port first
+(`Initial MCU fail`), then this one, logged as `485CS` followed by
+`Initial serial fail` on error.
+
+### Transceiver
+
+`U34`, an 8-pin SOIC between the alarm relays (K1/K3/K4) and the rear terminal
+block, marked `SP490EE` / `1249L` / `C23819`.
+
+| Property | Value |
+|---|---|
+| Part | MaxLinear (originally Sipex/Exar) **SP490E**, 8-pin NSOIC |
+| Type | **Full-duplex** RS-485/RS-422 transceiver |
+| Supply | 5 V only |
+| Max data rate | 10 Mbps |
+| Enable pins | **None** |
+| Pin compatible with | LTC490, SN75179 |
+
+Pinout: 1 `VCC`, 2 `R` (receiver output), 3 `D` (driver input), 4 `GND`,
+5 `Y` and 6 `Z` (driver outputs), 7 `B` and 8 `A` (receiver inputs). `D` takes
+UART2 TXD and `R` feeds UART2 RXD.
+
+**This settles the direction-control question: there isn't any.** The SP490E has
+no driver-enable or receiver-enable pin — the tri-state enables are what
+distinguish the 14-pin SP491E, which this board does not use. The driver is
+permanently on. That is why no 485 direction GPIO appears in the pinmux scripts
+or the loadable modules: nothing needs one.
+
+`1249L` reads as a 2012 week-49 date code, consistent with the board's other
+2013 markings. `C23819` is a lot code.
+
+### Terminal block
+
+Being full duplex, the part has a separate driver pair (`Y`/`Z`) and receiver
+pair (`A`/`B`) — four signal wires, not two. The rear terminal block breaks out
+both pairs, and the silkscreen labels them with the transceiver's own pin
+names (`pcb/connector_block.png`):
+
+| Terminal | Silkscreen | SP490E pin | Direction |
+|---|---|---|---|
+| `Y` | `P/Z` | 5 (driver out) | DVR → device |
+| `Z` | `P/Z` | 6 (driver out) | DVR → device |
+| `A` | `K/B` | 8 (receiver in) | device → DVR |
+| `B` | `K/B` | 7 (receiver in) | device → DVR |
+
+`P/Z` is PTZ and `K/B` is keyboard, matching the two firmware users exactly:
+the DVR transmits camera commands on the driver pair and receives keypresses on
+the receiver pair. Neither ground nor a termination pin is brought out.
+
+The four RS485 terminals sit on the upper row of a 16-way block shared with the
+alarm I/O — see [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#alarm-io) for
+the alarm pins on the same connector.
+
+### Porting
+
+Straightforward: `ttyAMA2` is a plain PL011 node, identical to the console but
+for the base and IRQ. Because the transceiver self-enables, **no RS485 support
+is needed in software at all** — no `rs485` device-tree properties, no DE GPIO,
+no `TIOCSRS485`. Open the port, set 9600 8N1, and read and write it as an
+ordinary serial device.
 
 ## Clock source
 

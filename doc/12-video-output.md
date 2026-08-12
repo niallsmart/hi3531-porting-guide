@@ -98,6 +98,23 @@ the PCIe-cascaded multi-SoC variants. The script this board actually runs,
 Since both CVBS outputs were enabled and running with no encoder driver loaded,
 they are driven by the **Hi3531's integrated CVBS DACs**.
 
+### Analog output stage
+
+The DACs feed an external buffer: `U17`, an **SG Micro SGM9119** marked
+`SGM9119YS8` / `1323C`. It is a 3-channel, 5th-order standard-definition video
+reconstruction filter driver in SOIC-8 — 3.3–5.5 V, 8 MHz −3 dB bandwidth,
+transparent input clamps, 6 dB gain, rail-to-rail output, about 21 mA.
+
+Three channels covers the two CVBS outputs in use with one spare. Three
+electrolytic capacitors sit immediately beside the part, consistent with
+per-channel output coupling, though the connections have not been traced.
+
+This is a passive analog stage with no register interface, no I²C address and
+no clock: nothing for a device tree to describe and no driver to port. It
+matters only as confirmation that the CVBS path is DAC-plus-buffer rather than
+an external encoder — a mainline port that brings up the VOU's DACs gets working
+composite output with no additional support.
+
 ## Framebuffer layers
 
 The vendor stack exposes HiSilicon's `hifb` framebuffer driver with seven

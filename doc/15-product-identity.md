@@ -54,7 +54,7 @@ Warranty void if removed.
 | Channels | **4CH 1080P realtime** | The four BT.1120 inputs at 1920x1080 and the `-i 4hd` variant selection |
 | Video out | **HDMI** | The SoC's integrated HDMI transmitter |
 | Audio | **4 inputs** | The audio path in [13-audio.md](13-audio.md) |
-| Alarm | **4 channels** | The relays on the board (K1/K3/K4 visible on the top surface) |
+| Alarm | **4 channels** | Four `COM`/`NO` output pairs and four inputs on the rear terminal block, but only three relays (K1/K3/K4) are fitted — see [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#alarm-io) |
 | Power | **DC 12 V** | — |
 | Serial | `812 1309 95 X 0058` | `1309` matches the PCB date code `20130921` and UL date code `3813` |
 | UPC | `8 12009 01917 0` | — |
@@ -81,8 +81,10 @@ serial console header (J3), and **ten SATA connector footprints**
 |---|---|---|---|
 | U1, U2 | Nanya (part number not decoded) | DDR SDRAM, 512 MB each | [02-memory-map.md](02-memory-map.md) |
 | U16 | TI, marked `PN521` / `35KG4` / `AL2R`, 56-pin | **Unidentified** — sited beside the VGA and HDMI connectors | — |
+| U17 | SG Micro SGM9119, marked `SGM9119YS8` / `1323C` | 3-channel 5th-order SD video reconstruction filter driver — analog video output stage | [12-video-output.md](12-video-output.md#cvbs-encoder) |
 | U19 | Nextchip NVP1104B | 4-channel analog video decoder | [11-video-input.md](11-video-input.md) |
 | U32 | Atmel AT89S52 | 8051 MCU — front panel | [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md) |
+| U34 | MaxLinear/Sipex SP490E, marked `SP490EE` / `1249L` / `C23819` | Full-duplex RS-485 transceiver — rear-panel RS485 | [05-uart-console.md](05-uart-console.md#rs485-rear-panel) |
 | U67 | Realtek RTL8211CL | Gigabit Ethernet PHY | [06-ethernet.md](06-ethernet.md) |
 | U88 | JMicron JMB321 | 5-port SATA port multiplier | [07-sata-storage.md](07-sata-storage.md) |
 | U91 | Lattice LFE3-17EA | ECP3 FPGA — video aggregation | [11-video-input.md](11-video-input.md) |
