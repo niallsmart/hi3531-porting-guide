@@ -1,0 +1,142 @@
+# Memory Map and DRAM
+
+## Summary
+
+The board has **two DDR controllers** with roughly **1 GB of DRAM total**, but
+the vendor firmware gives Linux only **224 MB**. The remaining ~790 MB is
+carved out for HiSilicon's Media Memory Zone (MMZ) allocator, which serves the
+video pipeline.
+
+**Recovering that memory is the single largest win in repurposing this board as
+a general-purpose server.** It requires nothing more than changing the kernel
+command line and not loading the MMZ driver.
+
+## Physical layout
+
+| Range | Size | Owner |
+|---|---|---|
+| `0x80000000` – `0x8DFFFFFF` | 224 MB | Linux `System RAM` (set by `mem=224M`) |
+| `0x8E000000` – `0x9F9FFFFF` | 288 MB | MMZ zone `anonymous` |
+| `0x9FA00000` – `0x9FEFFFFF` | 5 MB | MMZ zone `jpeg` |
+| `0x9FF00000` – `0xBFFFFFFF` | — | Not mapped (hole between the two controllers) |
+| `0xC0000000` – `0xDF7FFFFF` | 504 MB | MMZ zone `ddr1` |
+| `0xDF800000` – `0xDFFFFFFF` | 8 MB | Not accounted for |
+
+DDR controller 0 backs `0x80000000`; DDR controller 1 backs `0xC0000000`. This
+was confirmed by a live U-Boot register read: DDRC1 at `0x20120000` holds
+`0xC0000000` in four consecutive registers at offset `+0x40`, while the
+equivalent DDRC0 registers are zero (base `0x80000000` being the default).
+
+Adding up the mapped regions gives 224 + 288 + 5 = 517 MB on DDR0 and
+504 MB on DDR1 — consistent with **512 MB per controller, 1 GB total**.
+
+## What the firmware reports
+
+Three different numbers appear, all correct in their own context:
+
+| Reported | Where | Meaning |
+|---|---|---|
+| `DRAM: 256 MiB` | U-Boot banner | Compile-time constant `CFG_DDR_SIZE` in `include/configs/godnet.h`. Not a probe. Wrong for this board. |
+| `Memory: 224MB` | Kernel | Result of the `mem=224M` command-line clamp. |
+| `total size=809984KB (791MB)` | `/proc/media-mem` | Sum of the three MMZ zones. |
+
+U-Boot's `CONFIG_NR_DRAM_BANKS` is 1 and `CFG_DDR_SIZE` is `256*1024*1024` in
+the *SDK* source. The device's U-Boot was built from a modified tree — it
+reports the same 256 MiB, so the vendor apparently never corrected it. Treat
+the U-Boot DRAM figure as meaningless.
+
+## MMZ (Media Memory Zone)
+
+MMZ is HiSilicon's carve-out physical allocator, implemented in `mmz.ko` and
+exposed at `/proc/media-mem`. It is not CMA and has no mainline equivalent.
+
+At runtime the vendor application had allocated ~358 MB of the 791 MB across
+139 blocks with names like `vb` (video buffers), `Vdec0_Vdh`, `h264e0_Str`,
+`hifb_layer0`, `TDE_MEMPOOL_MMB`.
+
+For a server port, MMZ is simply not loaded and the whole address space becomes
+available to Linux.
+
+## Reclaiming the memory
+
+The vendor command line is:
+
+```
+mem=224M console=ttyAMA0,115200 root=/dev/mtdblock2 rootfstype=yaffs2 \
+  mtdparts=hi_sfc:2M(boot);hinand:8M(kernel),16M(rootfs),64M(user),32M(hdr000000) \
+  pcieclkext=0
+```
+
+Because the two banks are non-contiguous with a large hole between them, a
+modern kernel should describe them as two separate `memory` nodes in the device
+tree rather than using a single `mem=` argument:
+
+```dts
+memory@80000000 {
+    device_type = "memory";
+    reg = <0x80000000 0x20000000>,   /* DDR0: 512 MB — confirmed */
+          <0xc0000000 0x20000000>;   /* DDR1: 512 MB — confirmed */
+};
+```
+
+### Evidence for the bank sizes
+
+The 512 MB figure is measured. A write/read-back aliasing test from the U-Boot
+prompt, using addresses spread across each bank:
+
+```
+mw 0x81000000 aaaa0000 ... mw 0x9f000000 aaaa0004     (DDR0, 5 addresses over 496 MB)
+mw 0xc1000000 bbbb0000 ... mw 0xdf000000 bbbb0004     (DDR1, 5 addresses over 496 MB)
+```
+
+All ten read back their own distinct value:
+
+```
+81000000: aaaa0000     c1000000: bbbb0000
+91000000: aaaa0001     d1000000: bbbb0001
+99000000: aaaa0002     d9000000: bbbb0002
+9d000000: aaaa0003     dd000000: bbbb0003
+9f000000: aaaa0004     df000000: bbbb0004
+```
+
+No aliasing anywhere in either bank, so each is at least 496 MB — and since
+DRAM comes in powers of two, exactly **512 MB**. Re-reading `0x81000000` after
+the DDR1 writes still returned `aaaa0000`, confirming the two banks are
+genuinely independent rather than two windows onto the same memory.
+
+This is corroborated by the vendor's own alternate load script,
+`rootfs/mtd/modules/load3531_fpga`, which reserves nearly all of both banks:
+
+```
+mmz=anonymous,0,0x84000000,447M:ddr1,0,0xC0000000,511M
+```
+
+`0x84000000 + 447 MB = 0x9FFC0000` and `ddr1 = 511 MB` — both within 1 MB of a
+full 512 MB bank.
+
+Two further notes:
+
+1. **The DRAM parts have not been decoded.** U1 and U2 are Nanya devices
+   (photos in `pcb/`), and only the top surface has been photographed. Two
+   packages totalling 1 GB implies 512 MB each, consistent with the measurement
+   above.
+2. **DDR init is done before U-Boot proper.** DDR training/timing is set up by
+   the boot ROM and the SPI-NOR preloader using a register table, not by code
+   in `board/godnet/board.c` (whose `dram_init()` only fills in
+   `gd->bd->bi_dram[0]` from constants). A port that keeps the existing U-Boot
+   does not need to touch this; a port that replaces the bootloader does, and
+   the register table would have to be extracted from the SPI-NOR image.
+
+## Kernel virtual layout (vendor kernel, for reference)
+
+```
+vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+fixmap  : 0xfff00000 - 0xfffe0000   ( 896 kB)
+DMA     : 0xffc00000 - 0xffe00000   (   2 MB)
+vmalloc : 0xce800000 - 0xfe000000   ( 760 MB)
+lowmem  : 0xc0000000 - 0xce000000   ( 224 MB)
+modules : 0xbf000000 - 0xc0000000   (  16 MB)
+```
+
+Note the vendor kernel's lowmem ends at `0xCE000000` and vmalloc starts there —
+the static IO windows at `0xFE000000` / `0xFE900000` sit inside vmalloc space.

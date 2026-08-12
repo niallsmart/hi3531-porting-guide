@@ -1,0 +1,24 @@
+# Large received assets — deliberately not tracked.
+#
+# These are read-only inputs to the documentation effort, not work product.
+# They total ~2.7 GB, never change, and would bloat the repository (git would
+# hold a second compressed copy of every binary). Remove a line below and run
+# `git add` if you decide you want one of them versioned; consider Git LFS for
+# the flash images and photographs.
+
+# HiSilicon vendor SDK (2.5 GB)
+Hi3531_V100R001C01SPC0D1/
+
+# Flash and filesystem images (187 MB) — verified backups, hashed in their own
+# MANIFEST.md, with a second copy on the Raspberry Pi
+backups/
+
+# Export of the DVR's filesystem (49 MB)
+rootfs/
+
+# PCB photographs (36 MB)
+pcb/
+
+# macOS cruft
+.DS_Store
+._*

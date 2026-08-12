@@ -1,0 +1,213 @@
+# Live Register Dumps
+
+Raw register values read from the running board. These reflect **this DVR's
+actual hardware configuration**, not the HiSilicon reference design, which makes
+them the most direct evidence available for reconstructing the pinmux and clock
+setup.
+
+## How these were taken
+
+All dumps were made from the **U-Boot prompt** using `md` (memory display),
+which is read-only and safe.
+
+```
+hisilicon # md <address> <word_count>
+```
+
+> **Do not use the Linux-side `himm` tool for this.** `himm` reads a register
+> and then prompts `NewValue:` for a write. It is an interactive read-modify
+> tool, not a dump tool, and leaving a session at that prompt risks an
+> unintended register write. `himd` exists but returned `Bus error` on the
+> pinmux block.
+
+To retake or extend these dumps, see
+[18-reference-assets.md](18-reference-assets.md) for the capture script, and
+remember to resume the board with **`reset`** — neither `boot` nor `run` exists
+in this U-Boot build, so `run bootcmd` fails silently-looking too.
+
+## Pin multiplexing — IO_CONFIG at `0x200F0000`
+
+One 32-bit register per pin, holding a function-select integer. This is the
+board's shipped pin configuration.
+
+```
+200f0000: 00000000 00000000 00000000 00000000
+200f0010: 00000000 00000000 00000000 00000000
+200f0020: 00000000 00000000 00000000 00000000
+200f0030: 00000000 00000000 00000000 00000000
+200f0040: 00000000 00000000 00000000 00000001
+200f0050: 00000000 00000000 00000000 00000000
+200f0060: 00000000 00000000 00000000 00000000
+200f0070: 00000000 00000000 00000000 00000000
+200f0080: 00000000 00000000 00000000 00000000
+200f0090: 00000000 00000000 00000000 00000000
+200f00a0: 00000000 00000000 00000000 00000000
+200f00b0: 00000000 00000000 00000000 00000000
+200f00c0: 00000000 00000000 00000000 00000000
+200f00d0: 00000000 00000000 00000000 00000000
+200f00e0: 00000000 00000001 00000001 00000003
+200f00f0: 00000003 00000003 00000003 00000003
+200f0100: 00000003 00000003 00000003 00000003
+200f0110: 00000003 00000003 00000003 00000003
+200f0120: 00000003 00000003 00000003 00000003
+200f0130: 00000003 00000003 00000000 00000000
+200f0140: 00000000 00000000 00000000 00000000
+200f0150: 00000000 00000000 00000000 00000000
+200f0160: 00000000 00000000 00000000 00000000
+200f0170: 00000000 00000000 00000000 00000000
+200f0180: 00000000 00000000 00000000 00000000
+200f0190: 00000000 00000000 00000000 00000000
+200f01a0: 00000000 00000000 00000000 00000000
+200f01b0: 00000000 00000002 00000002 00000001
+200f01c0: 00000001 00000001 00000001 00000001
+200f01d0: 00000001 00000001 00000001 00000001
+200f01e0: 00000001 00000001 00000001 00000001
+200f01f0: 00000002 00000002 00000000 00000000
+```
+
+Decoded against the function map in [19-pinmux-map.md](19-pinmux-map.md):
+
+| Offset | Value | Selected function |
+|---|---|---|
+| `+0x000`–`+0x0E0` | 0 | VIU0 / VIU1 / VIU2 video input buses |
+| `+0x04C` | 1 | GPIO2_3 — buzzer control |
+| `+0x0E4`, `+0x0E8` | 1 | `VGA_HS`, `VGA_VS` |
+| `+0x0EC`–`+0x134` | 3 | **`VOU1120` — the BT.1120 video *output* bus, 19 pins** |
+| `+0x138`–`+0x1A8` | 0 | GPIO: the audio SIO ports, hardware SPI, hardware I²C and UART1 alternates are all deselected |
+| `+0x1B4`–`+0x1B8` | 2 | undocumented |
+| `+0x1BC`–`+0x1EC` | 1 | undocumented — 13 pins, plausibly RGMII to the Ethernet PHY |
+| `+0x1F0`–`+0x1F4` | 2 | undocumented |
+
+Two things follow:
+
+- The 19-pin run is video **output**, not input. Video input sits at function 0
+  in the `0x000`–`0x0E0` block.
+- The GPIO-mode block at `+0x138`–`+0x1A8` is what makes the bit-banged I²C
+  work: `0x200f0198` and `0x200f019c` — SDA and SCL — are left as GPIO rather
+  than routed to the hardware I²C controller.
+
+Registers `+0x1AC`–`+0x240` are not covered by any vendor pinctrl script, so
+the 13-pin run remains unidentified. The Ethernet guess is unconfirmed.
+
+This dump was taken in U-Boot, before Linux runs its pinctrl script, so some
+pins differ under the running vendor kernel — SPI, UART1, UART2, the audio SIO
+port and the HDMI pins are all set later. `stmmac` also claims
+`0x200F0000`–`0x200F01FF` and reconfigures pins at probe.
+
+## Clock and reset generator — CRG at `0x20030000`
+
+```
+20030000: 09000000 006c209b 14000000 006c2048
+20030010: 14000000 006c2063 09000000 007c2087
+20030020: 0b000000 007c207d 00000023 00000000
+20030030: 000aaaa0 61e03fc0 02037cfe 0000004c
+20030040: 00000001 00000001 00000001 00000001
+20030050: 00000001 00000001 00000001 00000000
+20030060: 00000001 00000001 00000001 00000001
+20030070: 00000005 00000001 000001e6 00000001
+20030080: 00000000 00000000 00000000 00000001
+20030090: 00000001 00000001 00000001 00000001
+200300a0: 00000001 00000000 00000000 00000000
+200300b0: 00000000 00000000 00000080 00000000
+200300c0: 00000006 00000002 00000000 0000000a
+200300d0: 00000006 00000003 00000002 00000000
+200300e0: 00000001 0000e060 0000001f 003f003f
+200300f0: 003d0030 00000000 00000000 00000000
+```
+
+Known register meanings:
+
+| Offset | Value | Meaning |
+|---|---|---|
+| `+0xE4` | `0x0000E060` | UART clock select — U-Boot clears `UART_CKSEL_APB` here |
+| `+0xEC` | `0x003F003F` | Ethernet clock/reset — written by `stmmac` at probe, matching the boot message `Set system config register 0x200300ec with value 0x003f003f` |
+
+The register pairs at `+0x00`–`+0x28` with values like `0x006C209B` and
+`0x007C2087` have the shape of PLL configuration words (multiplier, divider,
+fraction fields). The many `0x00000001` values from `+0x40` onward look like
+individual clock-enable or reset-deassert bits.
+
+The rest requires the datasheet's CRG chapter.
+
+## System controller — SYS_CTRL at `0x20050000`
+
+```
+20050000: 00150124 00000002 00000000 00000000
+20050010: 00000000 0fff8000 00000909 00003020
+20050020: 00000000 00000000 00000000 ffffffff
+20050030: 000007e0 00155500 5d75f000 00000000
+20050040: 00000000 00000000 00000000 00000000
+20050050: 00000000 00123456 00000000 00000000
+20050060: 00000000 00123456 01123456 00000000
+20050070: 00000000 00000000 00000000 00123456
+```
+
+`+0x00` is `REG_SC_CTRL` = `0x00150124`.
+
+The repeated `0x00123456` values are HiSilicon's conventional lock/magic key
+registers — writing that value unlocks an associated control register.
+
+### Boot-mode strap — `SYS_CTRL + 0x8C`
+
+`REG_SYSSTAT` sits beyond the block dumped above and was read separately:
+
+```
+2005008c: a0001d00
+```
+
+Bits [5:4] decode as 0 = SPI flash, 1 = DDR, 2/3 = NAND. Here
+`(0xA0001D00 >> 4) & 0x3 = 0`, so the board boots from **SPI flash**, agreeing
+with `getinfo bootmode`. See [01-soc-overview.md](01-soc-overview.md).
+
+## DDR controller 0 — `0x20110000`
+
+```
+20110000: 00000001 00000000 00000000 0000000f
+20110010: 00000001 00061b50 00000010 83f10610
+20110020: 00010785 00000000 00000000 00000132
+20110030: 00000132 00000132 00000132 00000132
+20110040: 80000000 80000000 80000000 80000000
+20110050: c455120c ff527932 83510096 ffdff6f4
+20110060: 000f2028 000f2028 000f2028 000f2028
+20110070: c455120c ff527932 83510096 ffdff6f4
+```
+
+## DDR controller 1 — `0x20120000`
+
+```
+20120000: 00000000 00000000 00000000 0000000f
+20120010: 00000001 00061b50 00000010 83f10610
+20120020: 00010785 00000000 00000000 00000132
+20120030: 00000132 00000132 00000132 00000132
+20120040: c0000000 c0000000 c0000000 c0000000
+20120050: c455120c ff527932 83510096 ffdff6f4
+20120060: 000f2028 000f2028 000f2028 000f2028
+20120070: c455120c ff527932 83510096 ffdff6f4
+```
+
+**This pair is the direct evidence for the two-controller memory layout.** The
+registers at `+0x40`–`+0x4C` hold the base address each controller decodes:
+`0x80000000` for DDRC0 and `0xC0000000` for DDRC1. Every other register is
+identical between the two, indicating two identically configured banks of the
+same DRAM. See [02-memory-map.md](02-memory-map.md).
+
+The four repeated values at `+0x50` and `+0x70` (`0xC455120C`, `0xFF527932`,
+`0x83510096`, `0xFFDFF6F4`) are per-lane DDR PHY training results. The
+`0x000F2028` values at `+0x60` are likely timing parameters.
+
+## Other useful U-Boot output
+
+```
+hisilicon # nand info
+Device 0: NAND 128MiB 3,3V 8-bit, sector size 128 KiB
+
+hisilicon # mii device
+MII devices:
+```
+
+`mii device` is empty because U-Boot does not initialise the MDIO bus until a
+network command runs. Run `ping` or `tftp` first if PHY register access is
+needed.
+
+`getinfo` requires an argument; invoking it bare only prints
+`getinfo - print hardware information`. The valid arguments were not determined.
