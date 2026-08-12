@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"gitlens.currentLine.enabled": false,
+		"git.blame.editorDecoration.enabled": false,
+		"search.useIgnoreFiles": false,
+		"files.exclude": {
+			"**/node_modules": true,
+			"**/.git": true,
+			"**/dist": true,
+			"**/build": true,
+			"**/.venv": true,
+			"**/__pycache__": true
+		}
+  }
+}
