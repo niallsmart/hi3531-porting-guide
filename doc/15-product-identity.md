@@ -22,16 +22,44 @@ Evidence, all from the running device:
 
 1. **GPL source releases** are far more likely to be found under TVT's name, or
    under a larger rebadger's, than under LTS. A TVT GPL drop for a Hi3531
-   platform would contain the actual board file with real GPIO and pinmux
-   assignments — which is the single largest gap in this documentation
-   (see [09-gpio-pinmux-i2c.md](09-gpio-pinmux-i2c.md)).
+   platform would contain the vendor's own board file, corroborating the pinmux
+   and GPIO detail derived here from the `pinctrl_*.sh` scripts
+   (see [19-pinmux-map.md](19-pinmux-map.md)).
 2. **Other people's work** on TVT Hi3531 boards is more likely to be findable
    and applicable than work on "LTS LTD2704XE-P" specifically.
-3. **FCC filings** under the OEM's name typically include internal photographs,
-   which would partly substitute for the missing underside PCB photos.
 
 Search terms worth trying: `TVT TD3531`, `TVT DHB_AX`, `td3531 GPL`,
 `Hi3531 TVT source`, `2704XD`.
+
+> **There is no FCC ID, so FCC internal photographs are not available.** The
+> chassis label carries the FCC logo but no ID number, meaning the unit was
+> authorised under Supplier's Declaration of Conformity rather than
+> certification. A DVR is an unintentional radiator (Part 15B), which does not
+> require an FCC ID and therefore generates no public filing. Underside board
+> photographs have to be taken directly.
+
+## Chassis label
+
+```
+Model: LTD2704XE-P
+4CH 1080P Realtime H.264 DVR,
+HDMI, 4 Audio, 4 Alarm, DC 12V
+UPC 8 12009 01917 0          CE   FC
+S/N: 812 1309 95 X 0058      MADE IN CHINA
+Warranty void if removed.
+```
+
+| Field | Value | Corroborates |
+|---|---|---|
+| Channels | **4CH 1080P realtime** | The four BT.1120 inputs at 1920x1080 and the `-i 4hd` variant selection |
+| Video out | **HDMI** | The SoC's integrated HDMI transmitter |
+| Audio | **4 inputs** | The audio path in [13-audio.md](13-audio.md) |
+| Alarm | **4 channels** | The relays on the board (K1/K3/K4 visible on the top surface) |
+| Power | **DC 12 V** | — |
+| Serial | `812 1309 95 X 0058` | `1309` matches the PCB date code `20130921` and UL date code `3813` |
+| UPC | `8 12009 01917 0` | — |
+
+Photograph: `pcb/label.png`.
 
 ## Component inventory
 
@@ -115,9 +143,11 @@ exist for this SoC.
 | Retail brand and model | LTS LTD2704XE-P |
 | ODM | TVT Digital (Shenzhen) |
 | Internal product code | `2704XD_P` |
-| Board family | `DHB_AX` |
+| Board family | `DHB_AX`, revision V1.2 |
 | Application | `td3531` |
-| Channels | 4 analog inputs |
+| Channels | 4 video, 4 audio, 4 alarm |
+| Supply | DC 12 V |
+| Serial number | `812 1309 95 X 0058` |
 | Firmware base | HiSilicon Hi3531 SDK, MPP V1.0.7.3 (Aug 2012) |
 | Kernel | Linux 3.0.8, built 2013-03-11 |
 | Bootloader | U-Boot 2010.06, built 2012-11-01 |

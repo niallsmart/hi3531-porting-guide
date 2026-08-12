@@ -80,11 +80,27 @@ The SoC provides five serial audio ports (SIO0–SIO4) across
 `DOUT` as well as a `DIN`, i.e. the only bidirectional port. See
 [19-pinmux-map.md](19-pinmux-map.md).
 
+## Channel count
+
+The chassis label specifies **4 audio inputs** alongside the four video
+channels (`4CH 1080P Realtime H.264 DVR, HDMI, 4 Audio, 4 Alarm, DC 12V`).
+
+That is a useful constraint: a single bidirectional I²S port (SIO4) carries
+four capture channels, so the four inputs are multiplexed onto it rather than
+each having its own port. Nextchip NVP11xx decoders integrate audio ADCs with
+exactly this arrangement — audio sampled alongside the video channels and
+serialised out on one bus — which fits the absence of any separate audio codec
+on this board.
+
 ## What is not known
 
 - **The I²S configuration** — sample rate, bit depth, master/slave, frame
   format. The vendor MPP stack configures this internally and it was not
   dumped.
+- **Whether the four audio inputs come through the NVP1104B** or from some
+  other part. The reasoning above is inference from the channel count and the
+  single SIO port, not a traced signal path. The `NVP1104B Overview.pdf` in
+  `datasheets/` would settle it.
 - **The physical connections** — how many audio inputs the DVR exposes, whether
   the analog audio for each camera channel goes through the codec or through
   the video decoder (Nextchip NVP11xx parts often include audio ADCs, which

@@ -145,12 +145,14 @@ Supporting evidence:
   keyboard/keypad driver.
 - `/dev/boardgpio` exists.
 - `ttyAMA1` had accumulated 11,268 interrupts while `ttyAMA2`/`ttyAMA3` had
-  none, implying an active serial peer.
+  none, implying an active serial peer. UART1 is muxed onto GPIO12_7 (RXD) and
+  GPIO13_0 (TXD) by the pinctrl script, so it is a real serial port rather than
+  a pin left in GPIO mode — see [19-pinmux-map.md](19-pinmux-map.md).
 
 > **The link between the AT89S52 and the SoC has not been traced, and the
 > protocol is unknown.** The `ttyAMA1` hypothesis is inference from interrupt
-> counts, not a confirmed connection. Establishing this would need either PCB
-> tracing or capturing `ttyAMA1` traffic on the running device.
+> counts and the pinmux, not a confirmed connection. Establishing this would
+> need either PCB tracing or capturing `ttyAMA1` traffic on the running device.
 
 The MCU's own firmware is in its internal flash and is not part of any backup.
 Whether it is readable depends on its lock bits.
@@ -158,6 +160,21 @@ Whether it is readable depends on its lock bits.
 For a server port, the front panel is optional. If you want the buttons, the
 practical approach is to snoop `/dev/ttyAMA1` under the vendor firmware and
 reimplement the protocol.
+
+## Alarm I/O
+
+The chassis label specifies **4 alarm channels**. Three "HUI KE" relays
+(K1, K3, K4) are visible on the top surface of the board, alongside a buzzer
+(BZ1); a fourth relay may be on the underside, which has not been photographed.
+
+Alarm inputs and relay outputs on this class of hardware are ordinary GPIOs.
+Neither the specific pins nor the input/output split has been established — the
+`pinctrl_*.sh` scripts name peripheral functions but not board-level roles for
+pins left in GPIO mode. `/dev/boardgpio` is the likely control interface.
+
+For a repurposed server this is unclaimed, directly usable I/O: four relay
+outputs are a genuinely useful thing to have on a home server, and reaching
+them needs only `gpio-pl061` plus the pin numbers.
 
 ## Atmel CryptoMemory
 

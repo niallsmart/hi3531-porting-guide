@@ -85,8 +85,10 @@ Ranked by how much they would change the work.
    confirming the pinmux and GPIO detail derived here from the `pinctrl_*.sh`
    scripts. See [15-product-identity.md](15-product-identity.md) for search
    terms.
-2. **Underside PCB photographs.** The SPI-NOR, NAND, RTC and regulators are
-   unlocated. Cheap to obtain.
+2. **Underside PCB photographs.** The SPI-NOR, NAND, RTC, regulators and a
+   possible fourth alarm relay are unlocated. These have to be taken directly —
+   the unit has no FCC ID, so there is no FCC filing with internal photographs
+   to fall back on (see [15-product-identity.md](15-product-identity.md)).
 3. **A flash programmer (CH341A + SOIC-8 clip) for recovery.** Not needed while
    the no-flash-writes rule holds, but essential before the first flash write.
 4. **The identity of `U16`.** A 56-pin TI part beside the VGA and HDMI
