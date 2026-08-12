@@ -37,11 +37,32 @@ third-party IP with existing mainline drivers:
 |---|---|---|
 | UART | ARM PL011 | `amba-pl011` |
 | Interrupt controller | ARM GIC (Cortex-A9) | `irq-gic` |
-| SMP / private timers | Cortex-A9 MPCore | `arm,cortex-a9-twd-timer` |
+| System timers | ARM SP804 (part `0x804`, designer ARM) at `0x20000000`, `0x20010000` | `arm,sp804` |
+| SMP | Cortex-A9 MPCore SCU at `0x20300000` | `arm,cortex-a9-scu` |
 | Ethernet | Synopsys DesignWare MAC 1000 (ID 0x36) | `stmmac` |
 | SATA | AHCI 1.2 | `ahci_platform` |
 | USB | EHCI + OHCI | `ehci-platform`, `ohci-platform` |
 | SD/MMC | Synopsys DesignWare (`hi_mci`) | `dw_mmc` |
+
+Every row above was checked against the SDK sources *and* the running device,
+rather than inferred from the IP pairing. The evidence:
+
+| Block | Hardware evidence | Vendor software evidence |
+|---|---|---|
+| UART | AMBA peripheral ID at `0x20080FE0` = `0x11`, `0x10`, `0x24`, `0x00` → part `0x011`, designer `0x41` (ARM), rev 2 | `CONFIG_SERIAL_AMBA_PL011=y`; dmesg `ttyAMA0 at MMIO 0x20080000 (irq = 40) is a PL011 rev2` |
+| GIC | Distributor at `0x20301000`, CPU interface at `0x20300100` — the standard Cortex-A9 PERIPHBASE layout | `gic_init()` in `mach-godnet/core.c`; `/proc/interrupts` shows `GIC` for every line |
+| Timers | Peripheral ID at `0x20000FE0` → part `0x804` (SP804), designer ARM | `CONFIG_LOCAL_TIMERS` **not** set; SP804 register use in `core.c` |
+| Ethernet | DWMAC version register `0x101C0020` = `0x00001036` → Synopsys ID **0x36** (DWMAC 3.6) | `CONFIG_STMMAC_ETH=m` with the upstream `drivers/net/stmmac/` tree incl. `dwmac1000_core.c` |
+| SATA | AHCI version register `0x10080010` = `0x00010200` → **AHCI 1.2** | `CONFIG_SATA_AHCI_PLATFORM=y`; dmesg `AHCI 0001.0200 32 slots 2 ports`, `scsi0 : ahci_platform` |
+| USB | dmesg `EHCI 1.00`, standard OHCI | `CONFIG_USB_EHCI_HCD`/`OHCI_HCD` cores wrapped by `hiusb-ehci.c` / `hiusb-ohci.c` |
+| SD/MMC | Controller present at `0x10020000`, IRQ 67, zero interrupts taken | `hi_mci_reg.h` register map is byte-for-byte dw_mmc (`CTRL` 0x00 … `BUFADDR` 0x98, including the IDMAC block) |
+
+Two caveats on otherwise-sound rows. The Ethernet and USB blocks need HiSilicon
+glue that mainline does not have: `stmmac` here is a vendor fork configured by
+Kconfig constants rather than device tree, and the USB cores need PHY and CRG
+setup from `hiusb-godnet.c`. In both cases the IP core itself is genuine and the
+mainline driver applies; the missing piece is init glue. The SD/MMC controller
+is a real dw_mmc instance but has never enumerated a card on this board.
 
 The blocks with *no* mainline path are the HiSilicon-proprietary media
 pipeline (VIU, VPSS, VOU, VEDU/H.264, VDEC, TDE, IVE, JPEG), the
@@ -149,8 +170,8 @@ writing a device tree.
 | `0x100A0000` | 0x10000 | USB 2.0 OHCI |
 | `0x100B0000` | 0x10000 | USB 2.0 EHCI |
 | `0x101C0000` | 0x20000 | Ethernet (two DWMAC1000 instances) |
-| `0x20000000` | — | Timer 0 |
-| `0x20010000` | — | Timer 1 |
+| `0x20000000` | 0x1000 | Timer 0 — ARM SP804 dual timer |
+| `0x20010000` | 0x1000 | Timer 1 — ARM SP804 dual timer |
 | `0x20030000` | 0x100 | CRG — clock and reset generator |
 | `0x20040000` | — | Watchdog |
 | `0x20050000` | — | System controller (SYS_CTRL) |
@@ -257,8 +278,9 @@ So the rule is simply:
 Cross-checked three ways: UART0 = 32+8 = 40 ✓, the timer = 32+3 = 35 ✓, and
 L2 chk0 = 32+37 = 69 ✓ — all matching the table above.
 
-The Cortex-A9 private timer is PPI 29 (`IRQ_LOCALTIMER`), which is the standard
-`arm,cortex-a9-twd-timer` binding.
+The Cortex-A9 private timer (TWD) sits at PPI 29 (`IRQ_LOCALTIMER`), the
+standard `arm,cortex-a9-twd-timer` binding. **The vendor kernel does not use
+it** — see [Timers](#timers) below.
 
 Applying the rule to the peripherals that matter for a server port:
 
@@ -280,6 +302,35 @@ Applying the rule to the peripherals that matter for a server port:
 
 In device-tree syntax these become `interrupts = <0 SPI 4>` — GIC type 0 (SPI),
 level-high (4). Verify the trigger type per peripheral before relying on it.
+
+## Timers
+
+Timekeeping is done by two **ARM SP804** dual-timer blocks, not by the Cortex-A9
+private timer. `CONFIG_LOCAL_TIMERS` is *not* set in `godnet_defconfig`, so the
+TWD is left idle even though the hardware has it.
+
+| Property | Value |
+|---|---|
+| Timer 0 (clockevent) | `0x20000000` |
+| Timer 1 (clocksource / `sched_clock`) | `0x20010000` |
+| IRQ | 35 (SPI 3), `TIMER01_IRQ`, shared by both halves |
+| Clock | 155 MHz (310 MHz bus ÷ 2 fixed prescale) |
+
+Identification is from the AMBA peripheral ID registers at `0x20000FE0`, read
+live: `0x04`, `0x18`, `0x14`, `0x00` → part number `0x804`, designer `0x41`
+(ARM), revision 1. That is an SP804, which mainline drives with `arm,sp804`
+(`drivers/clocksource/timer-sp804.c`).
+
+The control register at `0x20000008` reads `0xE2` on the running device —
+enable (bit 7), periodic (bit 6), interrupt enable (bit 5), 32-bit (bit 1) —
+matching the standard SP804 `TimerXControl` layout. Timer 0's load value is
+`0x0017A6B0` (1,550,000), which at HZ=100 gives the 155 MHz figure.
+
+Because there is no per-CPU local timer, CPU1 receives its ticks by IPI: on the
+running device `IPI0 Timer broadcast interrupts` has ~2.58 M counts on CPU1 and
+zero on CPU0. A mainline port can either keep this arrangement with `arm,sp804`,
+or enable the TWD at PPI 29 — the TWD path is untested on this hardware, and
+the A9 TWD clock scales with the CPU clock, which is why vendors often avoid it.
 
 ## Clocks
 

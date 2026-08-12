@@ -26,7 +26,10 @@ project, and it looks sound.
 
 1. Set up cross-compilation for ARMv7 (`arm-linux-gnueabihf`).
 2. Write a minimal device tree: CPU, GIC, timers, memory, PL011 UART0.
-   Bases and IRQs are in [01-soc-overview.md](01-soc-overview.md). Leave the L2
+   Bases and IRQs are in [01-soc-overview.md](01-soc-overview.md). Use
+   `arm,sp804` at `0x20000000`/`0x20010000` on IRQ 35 for timekeeping — that is
+   the path the vendor kernel uses; the Cortex-A9 TWD is present but untested
+   here. Leave the L2
    cache out — it is a HiSilicon block with no mainline driver, and the kernel
    boots without it. See
    [the L2 section](01-soc-overview.md#l2-cache-controller).
@@ -117,6 +120,7 @@ Where the answers to the most commonly needed questions live.
 | Bit-banged I²C pins? | SDA = GPIO12_4, SCL = GPIO12_5 | [19-pinmux-map.md](19-pinmux-map.md) |
 | What does the board boot from? | SPI-NOR (`getinfo bootmode` → `spi`) | [03-boot-chain.md](03-boot-chain.md) |
 | Is the L2 cache a PL310? | No — HiSilicon L2 Cache V200, no mainline driver | [01-soc-overview.md](01-soc-overview.md#l2-cache-controller) |
+| Which timer drives the clock? | ARM SP804 at `0x20000000`, IRQ 35 — not the A9 TWD | [01-soc-overview.md](01-soc-overview.md#timers) |
 | Where is the FPGA bitstream? | `.rodata` of `fpga_jtag.ko`, a Lattice VME file | [11-video-input.md](11-video-input.md) |
 | Which external codecs are fitted? | None — no ADV7179, TLV320AIC31 or SiI9024 | [12-video-output.md](12-video-output.md) |
 
