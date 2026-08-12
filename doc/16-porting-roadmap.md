@@ -25,8 +25,11 @@ project, and it looks sound.
 ## Phase 1 — Boot a mainline kernel to a serial console
 
 1. Set up cross-compilation for ARMv7 (`arm-linux-gnueabihf`).
-2. Write a minimal device tree: CPU, GIC, PL310, timers, memory, PL011 UART0.
-   Bases and IRQs are in [01-soc-overview.md](01-soc-overview.md).
+2. Write a minimal device tree: CPU, GIC, timers, memory, PL011 UART0.
+   Bases and IRQs are in [01-soc-overview.md](01-soc-overview.md). Leave the L2
+   cache out — it is a HiSilicon block with no mainline driver, and the kernel
+   boots without it. See
+   [the L2 section](01-soc-overview.md#l2-cache-controller).
 3. Build with `earlycon` on the PL011 at `0x20080000`.
 4. Load over TFTP from the Raspberry Pi and boot with `bootm`, writing nothing.
 
@@ -71,6 +74,7 @@ In rough order of value:
 | USB | Low–medium | Standard EHCI/OHCI, needs PHY glue |
 | RTC | Low | `i2c-gpio` + `rtc-ds1307`, once pins are known |
 | SD/MMC | Medium | `dw_mmc` may fit; socket may not exist |
+| L2 cache | Medium | Forward-port the vendor `cache-hil2v200.c`; performance only, boots without it |
 | GPIO / front panel | Medium | Needs the pin assignments |
 | Audio | High | Needs an ASoC platform driver written from scratch |
 | Video output | Very high | Proprietary VOU, no documentation |
@@ -112,6 +116,7 @@ Where the answers to the most commonly needed questions live.
 | Where is the MAC address? | `/etc/init.d/mac.dat`; factory master at SPI-NOR `0xBFC20` | [04-flash-storage.md](04-flash-storage.md) |
 | Bit-banged I²C pins? | SDA = GPIO12_4, SCL = GPIO12_5 | [19-pinmux-map.md](19-pinmux-map.md) |
 | What does the board boot from? | SPI-NOR (`getinfo bootmode` → `spi`) | [03-boot-chain.md](03-boot-chain.md) |
+| Is the L2 cache a PL310? | No — HiSilicon L2 Cache V200, no mainline driver | [01-soc-overview.md](01-soc-overview.md#l2-cache-controller) |
 | Where is the FPGA bitstream? | `.rodata` of `fpga_jtag.ko`, a Lattice VME file | [11-video-input.md](11-video-input.md) |
 | Which external codecs are fitted? | None — no ADV7179, TLV320AIC31 or SiI9024 | [12-video-output.md](12-video-output.md) |
 

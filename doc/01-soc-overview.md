@@ -13,7 +13,7 @@
 | Other features | `swp half thumb fastmult edsp` | `/proc/cpuinfo` |
 | BogoMIPS | 1849.75 / 1856.30 (per core), `lpj=9248768` | dmesg |
 | Cache | VIPT non-aliasing D-cache, VIPT aliasing I-cache | dmesg |
-| L2 cache | PL310 at `0x20700000` | dmesg, SDK |
+| L2 cache | HiSilicon proprietary "L2 Cache V200" at `0x20700000` — **not** an ARM PL310 | SDK, live register reads |
 | Machine ID | `godnet` / `MACH_TYPE_GODNET` | dmesg, U-Boot `board.c` |
 | PCI vendor:device | `19e5:3531` (PCIe root complexes) | dmesg |
 
@@ -37,7 +37,6 @@ third-party IP with existing mainline drivers:
 |---|---|---|
 | UART | ARM PL011 | `amba-pl011` |
 | Interrupt controller | ARM GIC (Cortex-A9) | `irq-gic` |
-| L2 cache | ARM PL310 | `cache-l2x0` |
 | SMP / private timers | Cortex-A9 MPCore | `arm,cortex-a9-twd-timer` |
 | Ethernet | Synopsys DesignWare MAC 1000 (ID 0x36) | `stmmac` |
 | SATA | AHCI 1.2 | `ahci_platform` |
@@ -45,9 +44,94 @@ third-party IP with existing mainline drivers:
 | SD/MMC | Synopsys DesignWare (`hi_mci`) | `dw_mmc` |
 
 The blocks with *no* mainline path are the HiSilicon-proprietary media
-pipeline (VIU, VPSS, VOU, VEDU/H.264, VDEC, TDE, IVE, JPEG) and the
-HiSilicon NAND and SPI flash controllers. See
+pipeline (VIU, VPSS, VOU, VEDU/H.264, VDEC, TDE, IVE, JPEG), the
+HiSilicon NAND and SPI flash controllers, and the L2 cache controller. See
 [14-media-codec.md](14-media-codec.md) and [04-flash-storage.md](04-flash-storage.md).
+
+## L2 cache controller
+
+The L2 controller at `0x20700000` is a HiSilicon in-house design, **not** an ARM
+PL310, despite the Cortex-A9 MPCore pairing that usually implies one. Nothing in
+the SDK or on the running device supports a PL310 identification.
+
+Evidence:
+
+- The vendor defconfig selects `CONFIG_CACHE_HIL2V200=y` ("Enable the Hisilicon
+  L2 Cache V200"), driven by `arch/arm/mm/cache-hil2v200.c` and
+  `cache-hil2v200.h`. `CONFIG_CACHE_L2X0` is not set, and its `depends on` list
+  in `arch/arm/mm/Kconfig` does not include `ARCH_GODNET` — the l2x0 driver
+  cannot even be selected for this SoC.
+- The register layout is incompatible with PL310 (see table below). PL310 places
+  a read-only Cache ID register at offset `0x000` and the control register at
+  `0x100`; this block puts a writable control register at `0x000`.
+- The kernel banner is `L2cache cache controller enabled`, printed by
+  `cache-hil2v200.c`. The l2x0 driver's `l2x0: N ways, CACHE_ID 0x…` line never
+  appears.
+- Live reads on the running DVR match the HiL2V200 driver's init sequence
+  exactly:
+
+  | Address | Value | HiL2V200 meaning |
+  |---|---|---|
+  | `0x20700000` | `0x00000001` | `L2_CTRL` — cache enabled |
+  | `0x20700004` | `0x01803000` | `L2_AUCTRL` — bits 12/13 = `EVENT_BUS_EN`, `MONITOR_EN`, as written by the driver |
+  | `0x20700008` | `0x00000002` | `L2_STATUS` |
+  | `0x20700100` | `0x00003FFF` | `L2_INTMASK` — the literal `0x3fff` the driver writes |
+  | `0x20700108` | `0x00000000` | `L2_RINT` — no errors latched |
+
+  Under a PL310 mapping, `0x000` would read `0x410000C…` and `0x100` would be a
+  control register with only bit 0 defined; `0x3FFF` there is meaningless.
+
+### Register map
+
+Offsets from `0x20700000`, per `arch/arm/mm/cache-hil2v200.h`:
+
+| Offset | Register |
+|---|---|
+| `0x000` | `L2_CTRL` — bit 0 enables the cache |
+| `0x004` | `L2_AUCTRL` — auxiliary control |
+| `0x008` | `L2_STATUS` — bit 0 idle, bit 1 SPNIDEN |
+| `0x100` – `0x12C` | Interrupt mask / masked / raw / clear, for the core, internal monitor, and external monitor |
+| `0x200` | `L2_SYNC` |
+| `0x20C` | `L2_MAINT_AUTO` |
+| `0x210` | `L2_INVALID` |
+| `0x214` | `L2_CLEAN` |
+| `0x300`, `0x304` | D-side / I-side way lock |
+| `0x400` – `0x410` | Test mode and interrupt/event test |
+| `0x500` – `0x510` | Region 0–4 configuration |
+| `0x600` – `0x628` | Internal monitor counters 0–10 |
+| `0x700` – `0x76C` | External monitor counters 0–27 |
+| `0x800` – `0x808` | Special control and check registers 0–1 |
+
+The register file ends at `0x80C`, so a 4 KB window covers it.
+
+Cleans and invalidates are range-based: write start and end addresses, then poll
+`L2_RINT` for completion. There is no PL310-style per-line
+`clean_line`/`inv_line` register.
+
+### Interrupts
+
+Three GIC lines, unlike PL310's single combined output:
+
+| IRQ | Name | SDK symbol |
+|---|---|---|
+| 69 | `L2 chk0` | `INTNR_L2CACHE_CHK0_INT` (`GODNET_IRQ_START + 37`) |
+| 70 | `L2 chk1` | `INTNR_L2CACHE_CHK1_INT` (`GODNET_IRQ_START + 38`) |
+| 71 | `L2 com` | `INTNR_L2CACHE_INT_COMB` (`GODNET_IRQ_START + 39`) |
+
+All three are confirmed present in `/proc/interrupts` on the running device.
+
+### Porting implications
+
+U-Boot leaves the L2 controller alone; the kernel brings it up. A mainline port
+therefore boots fine with the outer cache disabled, at a performance cost.
+
+To use the L2, the vendor driver has to be forward-ported: it is a self-contained
+`outer_cache` provider (`inv_range`, `clean_range`, `flush_range`, `sync`,
+`flush_all`, `inv_all`, `disable`) and the `outer_cache` hooks it fills still
+exist in current kernels. The work is adapting it to device tree probing and
+current locking conventions rather than reverse-engineering the hardware.
+Do **not** point a `arm,pl310-cache` compatible at this address — the register
+writes would land on unrelated registers.
 
 ## Register base map
 
@@ -82,7 +166,7 @@ writing a device tree.
 | `0x20150000` | 0x10000 each | GPIO group 0 … GPIO group 18 (`0x20150000 + n*0x10000`) |
 | `0x20300000` | — | Cortex-A9 private peripherals (SCU, GIC, TWD) |
 | `0x20400000` | — | ARM debug |
-| `0x20700000` | 0x10000 | L2 cache controller (PL310) |
+| `0x20700000` | 0x1000 | L2 cache controller (HiSilicon L2 Cache V200) |
 | `0x20800000` | — | PCIe0 controller registers |
 | `0x20810000` | — | PCIe1 controller registers |
 | `0x30000000` | 0x7800000 | PCIe0 memory window |

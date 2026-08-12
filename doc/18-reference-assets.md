@@ -30,7 +30,7 @@ Hi3531_V100R001C01SPC0D1/
 └── 01.software/board/Hi3531_SDK_V1.0.D.1/
     ├── osdrv/
     │   ├── kernel/linux-3.0.y/    (extracted; also linux-3.0.y.tgz)
-    │   ├── uboot/u-boot-2010.06.tgz
+    │   ├── uboot/u-boot-2010.06/  (extracted; also u-boot-2010.06.tgz)
     │   └── toolchain/             (arm-hisiv100nptl-linux, arm-hisiv200-linux)
     ├── mpp/                       (media libraries, prebuilt .ko, extdrv sources)
     ├── drv/                       (rtc, wtdg, cipher, hidmac, mmz, irda)
