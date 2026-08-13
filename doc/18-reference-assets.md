@@ -60,7 +60,7 @@ Key files for a porter:
 
 | File | Why |
 |---|---|
-| `u-boot-2010.06/arch/arm/include/asm/arch-godnet/platform.h` | The complete SoC register base map |
+| `u-boot-2010.06/arch/arm/include/asm/arch-godnet/platform.h` | Register bases, though incomplete — it omits timers 2 and 3, hardware I²C and SPI, DMA and CIPHER. The datasheet's section 1 is the full map |
 | `u-boot-2010.06/board/godnet/board.c` | Boot media strap, UART clock setup |
 | `u-boot-2010.06/include/configs/godnet.h` | Build-time configuration |
 | `u-boot-2010.06/common/cmd_getinfo.c` | The `getinfo` subcommands, incl. undocumented `bootmode` |

@@ -19,11 +19,11 @@ than only the cited example; the "Changed" row lists them all.
 | 6 | [Secondary CPU startup](06-secondary-cpu-startup.md) | **Confirmed** | `1c7094d` |
 | 7 | [Pinmux provenance and completeness](07-pinmux-map.md) | **Confirmed** | `7723da3` |
 | 8 | [Scope of the register documentation](08-register-documentation.md) | **Confirmed** | `993bbca` |
-| 9 | [GPIO and watchdog confidence](09-gpio-watchdog.md) | **Confirmed** | |
+| 9 | [GPIO and watchdog confidence](09-gpio-watchdog.md) | **Confirmed** | `ac1f606` |
 | 10 | [DDR0 MMZ arithmetic](10-ddr0-mmz-arithmetic.md) | **Confirmed** | `a6ac3ed` |
-| 11 | [Ethernet DTS details](11-ethernet-dts.md) | **Confirmed** | |
+| 11 | [Ethernet DTS details](11-ethernet-dts.md) | **Confirmed** | `ac1f606` |
 | 12 | [Internal contradictions](12-internal-contradictions.md) | **Confirmed** (all four) | `a6ac3ed` |
-| 13 | [Register-map completeness](13-register-map-completeness.md) | Not yet investigated | |
+| 13 | [Register-map completeness](13-register-map-completeness.md) | **Confirmed** | |
 
 ---
 
@@ -1087,3 +1087,99 @@ CRG bit layout that had only been read out of SDK source. A glue driver's
 |---|---|
 | `doc/06-ethernet.md` | GMAC0/GMAC1 mapping with the live CRG read; core-version section; the RTL8211B labelling note; interface-mode section rewritten around the driver's lack of delay support; DTS sketch corrected to `rgmii` and `snps,dwmac`, renamed `gmac1`, with a compatible-string discussion and an explicit unverified list; assessment sharpened |
 | `doc/16-porting-roadmap.md` | Phase 3 names GMAC1, warns off `snps,dwmac-3.60a`, notes the pinmux needs nothing; two new quick-reference rows |
+
+---
+
+## 13. Register-map completeness — **Confirmed**
+
+The table was described as authoritative and was not. Section 1 of the
+datasheet has the real map, and filling it in turned up three blocks with
+mainline drivers that nothing had mentioned, two extra timers, and a size
+error that would have silently truncated a `syscon` node.
+
+### Evidence
+
+The datasheet's address map has **113 entries**, and every block the chip
+decodes is in it. Absent from `doc/01`'s previous table:
+
+| Base | Block | Matters because |
+|---|---|---|
+| `0x200C0000` | Hardware SPI (SSP) | Has a mainline driver — see below |
+| `0x200D0000` | Hardware I²C | The board bit-bangs instead; this explains what it is bypassing |
+| `0x100D0000` | DMA controller | Has a mainline driver, with a caveat |
+| `0x100C0000` | CIPHER | Crypto engine, datasheet chapter 3.6 |
+| `0x10030000`–`0x100F0000` | SIO0–SIO5 | SIO4 at `0x100E0000` is the audio port this board uses |
+| `0x20130000`, `0x20140000` | **Timer2, Timer3** | Two more SP804 blocks |
+| `0x04000000`, `0x04010000` | Boot ROM, 64 KB on-chip SRAM | |
+| `0x00000000` | Address-remap region | Where CPU1's holding code runs (item 6) |
+| `0x10150000`–`0x10170000` | SCD0, SCD1, JPGD | Media path |
+| `0x20680000`–`0x206D0000` | VPSS1, VENC1, VDH1, VCMP, MD, BPD | Media path |
+
+**There is no eFuse register block.** The review listed one; the datasheet has
+eFUSE *pins* (section 2.1.3.21) but nothing in the address map.
+
+**Three blocks identified from live PrimeCell reads**, since the datasheet
+names them without saying whose IP they are:
+
+| Base | PID0–3 | periphid | Part |
+|---|---|---|---|
+| `0x200C0000` | `22 10 04 00` | `0x00041022` | **ARM PL022** SPI |
+| `0x100D0000` | `80 10 14 0A` | `0x0A141080` | **ARM PL080** DMA, customer-modified |
+| `0x20130000`, `0x20140000` | `04 18 14 00` | `0x00141804` | **ARM SP804** — same ID as timers 0 and 1 |
+
+`0x200D0000`, `0x100C0000` and `0x100E0000` read zero: HiSilicon blocks with no
+AMBA identity, like the GPIO controllers in item 9.
+
+The PL022 is free — `0x00041022` is `spi-pl022`'s plain ARM entry, so an
+`arm,pl022` node on SPI 12 binds with no override.
+
+**The PL080 is a trap.** `0x0A141080` appears in `amba-pl08x`'s table with mask
+`0xffffffff` as `vendor_pl080s`, **the Samsung PL080S**, listed ahead of the
+generic `0x00041080`. An `arm,pl080` node therefore binds but gets Samsung
+variant behaviour, which differs in channel register layout. The `0x0A` is the
+customer-modified field, and HiSilicon happening to use the same value as
+Samsung does not make them the same block. Recorded as a warning; nothing in a
+server build needs DMA.
+
+**A size error worth its own note.** `0x200F0000` was listed with size `0x200`.
+The pinmux block is 151 registers ending at `0x258`, so `0x200` stops at
+register 128 and excludes the NAND pins, the SPI-NOR pins, USB over-current and
+power, HDMI and the SATA LEDs. A `syscon` node built from the old figure would
+have failed on exactly the registers item 7 added.
+
+**The interrupt table had the same problem**, and worse. It listed only what
+appears in `/proc/interrupts` — about a third of the lines — under vendor
+driver names. The datasheet gives all 96 SPIs. Two of the vendor names were
+actively misleading: **IRQ 100 is motion detection**, which the vendor calls
+"VDA", and **103 and 104 are two separate start-code detectors** where the
+vendor registers one "SCD". The table now carries both columns.
+
+### Answers to the four questions
+
+**Exhaustive or a port-focused subset?** It was an undeclared subset. It is now
+exhaustive, which is cheap since the source is one datasheet section.
+
+**Which omitted blocks matter?** PL022 SPI and PL080 DMA both have mainline
+drivers. The two extra SP804s give a port six spare timers instead of two.
+Hardware I²C matters as context for the bit-banged bus. The rest are media
+blocks, listed for completeness.
+
+**Add everything or narrow the wording?** Add everything. The stated project
+goal is enabling as much hardware as is feasible, and a table that silently
+omits two of the three blocks with usable mainline drivers works against that.
+
+**What do the sizes mean?** They were inconsistent — a mix of window sizes,
+mapped sizes and observed extents, with at least one wrong. The datasheet gives
+every peripheral a uniform 64 KB decode window, which says nothing about
+register count. The column is now the **register extent** where established,
+with the window marked as such where it is not, and the distinction is
+explained above the table.
+
+### Changed
+
+| File | What |
+|---|---|
+| `doc/01-soc-overview.md` | Register base map rebuilt from the datasheet with all decoded blocks and an explanation of the size column; the `0x200F0000` size corrected to `0x25C`; new section identifying PL022, PL080 and the two SP804s from live IDs, with the Samsung PL080S warning; SP804 count corrected from two to four throughout; interrupt map replaced with all 96 SPIs cross-referenced to vendor names |
+| `doc/16-porting-roadmap.md` | Phase 5 rows for hardware SPI, spare timers and DMA; two quick-reference rows |
+| `doc/18-reference-assets.md` | `platform.h` no longer described as the complete base map, with what it omits |
+| `doc/README.md` | Table-of-contents entry for `doc/01` |

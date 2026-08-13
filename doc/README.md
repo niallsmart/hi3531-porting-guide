@@ -52,7 +52,7 @@ CPU, memory and UART are equally conventional.
 
 | # | Document | Contents |
 |---|---|---|
-| 01 | [SoC Overview](01-soc-overview.md) | CPU, complete register base map, interrupt map, clocks, mainline status |
+| 01 | [SoC Overview](01-soc-overview.md) | CPU, the full SoC address map, all 96 interrupts, timers, SMP, clocks, mainline status |
 | 02 | [Memory Map and DRAM](02-memory-map.md) | Two DDR controllers, the 224 MB/MMZ split, how to reclaim the memory |
 | 03 | [Boot Chain and U-Boot](03-boot-chain.md) | Boot sequence, environment, available commands, TFTP workflow |
 | 04 | [Flash Storage](04-flash-storage.md) | SPI-NOR and NAND, partition layout, kernel image, backups |

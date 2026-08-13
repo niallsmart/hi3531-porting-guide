@@ -161,48 +161,131 @@ writes would land on unrelated registers.
 
 ## Register base map
 
-Taken from the SDK U-Boot header
-`arch/arm/include/asm/arch-godnet/platform.h`, cross-checked against
-`/proc/iomem` on the running device. This is the authoritative address map for
-writing a device tree.
+**This is the complete SoC address map**, from section 1 of the Hi3531
+datasheet, cross-checked against the SDK U-Boot header
+`arch/arm/include/asm/arch-godnet/platform.h` and `/proc/iomem` on the running
+device. Reserved ranges are omitted; everything the chip decodes is here.
 
-| Base | Size | Block |
-|---|---|---|
-| `0x10000000` | 0x100 | NAND flash controller (NANDC) |
-| `0x10010000` | 0x100 | SPI flash controller (SFC) |
-| `0x10020000` | 0x1000 | SD/MMC controller (`hi_mci`) |
-| `0x10080000` | 0x10000 | SATA / AHCI |
-| `0x100A0000` | 0x10000 | USB 2.0 OHCI |
-| `0x100B0000` | 0x10000 | USB 2.0 EHCI |
-| `0x101C0000` | 0x20000 | Ethernet (two DWMAC1000 instances) |
-| `0x20000000` | 0x1000 | ARM SP804 dual timer — the one the vendor kernel uses |
-| `0x20010000` | 0x1000 | ARM SP804 dual timer — present, unused |
-| `0x20030000` | 0x100 | CRG — clock and reset generator |
-| `0x20040000` | 0x1000 | Watchdog — ARM SP805 |
-| `0x20050000` | — | System controller (SYS_CTRL) |
-| `0x20060000` | 0x1000 | On-chip RTC — ARM PL031 |
-| `0x20070000` | — | IR receiver — HiSilicon block, not a PrimeCell |
-| `0x20080000` | 0x1000 | UART0 (console) |
-| `0x20090000` | 0x1000 | UART1 |
-| `0x200A0000` | 0x1000 | UART2 |
-| `0x200B0000` | 0x1000 | UART3 |
-| `0x200F0000` | 0x200 | IO_CONFIG — pin multiplexing |
-| `0x20110000` | — | DDR controller 0 |
-| `0x20120000` | — | DDR controller 1 |
-| `0x20150000` | 0x10000 each | GPIO group 0 … GPIO group 18 (`0x20150000 + n*0x10000`) |
-| `0x20300000` | 0x2000 | Cortex-A9 PERIPHBASE — see the offsets below |
-| `0x20400000` | — | ARM debug |
-| `0x20700000` | 0x1000 | L2 cache controller (HiSilicon L2 Cache V200) |
-| `0x20800000` | — | PCIe0 controller registers |
-| `0x20810000` | — | PCIe1 controller registers |
-| `0x30000000` | 0x7800000 | PCIe0 memory window |
-| `0x40000000` | — | PCIe0 configuration space |
-| `0x50000000` | 0x880 | NAND memory-mapped window |
-| `0x58000000` | 0x4000000 | SPI flash memory-mapped window |
-| `0x60000000` | 0x7800000 | PCIe1 memory window |
-| `0x70000000` | — | PCIe1 configuration space |
-| `0x80000000` | — | DDR0 (see [02-memory-map.md](02-memory-map.md)) |
-| `0xC0000000` | — | DDR1 |
+### Reading the size column
+
+The datasheet gives every peripheral a **64 KB decode window** regardless of how
+many registers it actually has, so the windows say nothing about the register
+count. The column below gives the **register extent** — how much a device-tree
+`reg` property should actually cover — with the window noted only where it
+differs usefully. Where the extent is not established the window is given and
+marked.
+
+| Base | Extent | Block | Notes |
+|---|---|---|---|
+| `0x00000000` | 64 MB | Address-remap region | Where U-Boot copies the CPU1 holding code. Not DRAM — see [Secondary CPU startup](#secondary-cpu-startup) |
+| `0x04000000` | 64 KB | Boot ROM | |
+| `0x04010000` | 64 KB | On-chip SRAM | 64 KB. Not used by the vendor firmware |
+| `0x10000000` | 64 KB (window) | NAND flash controller (NANDC) | No mainline driver |
+| `0x10010000` | 64 KB (window) | SPI flash controller (SFC) | No mainline driver |
+| `0x10020000` | 0x1000 | SD/MMC/SDIO | `dw_mmc` may fit; pins clash with VIU3 |
+| `0x10030000` | 64 KB (window) | SIO0 — audio serial port | |
+| `0x10040000` | 64 KB (window) | SIO1 | |
+| `0x10050000` | 64 KB (window) | SIO2 | |
+| `0x10060000` | 64 KB (window) | SIO3 | |
+| `0x10080000` | 0x10000 | SATA / AHCI | `ahci_platform` |
+| `0x100A0000` | 0x10000 | USB 2.0 OHCI | |
+| `0x100B0000` | 0x10000 | USB 2.0 EHCI | |
+| `0x100C0000` | 64 KB (window) | CIPHER — crypto engine | HiSilicon block, no AMBA ID. Datasheet chapter 3.6 |
+| `0x100D0000` | 0x1000 | DMA controller — **ARM PL080** | IRQ 61/62. Read as a Samsung PL080S by mainline — see below |
+| `0x100E0000` | 64 KB (window) | **SIO4** | The audio port this board uses — see [13-audio.md](13-audio.md) |
+| `0x100F0000` | 64 KB (window) | SIO5 | |
+| `0x10150000` | 64 KB (window) | SCD0 — start-code detect | Media path |
+| `0x10160000` | 64 KB (window) | SCD1 | Media path |
+| `0x10170000` | 64 KB (window) | JPGD — JPEG decoder | Media path, undocumented |
+| `0x101C0000` | 0x20000 | Ethernet — two DWMAC1000 instances | GMAC0 at `+0x0000`, **GMAC1 at `+0x4000` is the live port** |
+| `0x20000000` | 0x1000 | SP804 dual timer 0 | The one the vendor kernel uses. IRQ 35 |
+| `0x20010000` | 0x1000 | SP804 dual timer 1 | Unused. IRQ 36 |
+| `0x20030000` | 0x100 | CRG — clock and reset generator | |
+| `0x20040000` | 0x1000 | Watchdog — ARM SP805 | IRQ 34 |
+| `0x20050000` | 0x1000 | System controller (SYS_CTRL) | |
+| `0x20060000` | 0x1000 | On-chip RTC — ARM PL031 | IRQ 39 |
+| `0x20070000` | 64 KB (window) | IR receiver | HiSilicon block, not a PrimeCell. IRQ 48 |
+| `0x20080000` | 0x1000 | UART0 — console | IRQ 40 |
+| `0x20090000` | 0x1000 | UART1 | IRQ 41 |
+| `0x200A0000` | 0x1000 | UART2 — rear RS485 | IRQ 42 |
+| `0x200B0000` | 0x1000 | UART3 | IRQ 43 |
+| `0x200C0000` | 0x1000 | **Hardware SPI — ARM PL022** | IRQ 44. Mainline `spi-pl022`, binds cleanly |
+| `0x200D0000` | 64 KB (window) | **Hardware I²C** | IRQ 45. Unused — this board bit-bangs I²C on GPIO |
+| `0x200F0000` | **0x25C** | IO_CONFIG — pin multiplexing | 151 registers, `0x000`–`0x258`. See below |
+| `0x20110000` | 64 KB (window) | DDR controller 0 | |
+| `0x20120000` | 64 KB (window) | DDR controller 1 | |
+| `0x20130000` | 0x1000 | **SP804 dual timer 2** | IRQ 37. Genuine SP804, absent from the SDK headers |
+| `0x20140000` | 0x1000 | **SP804 dual timer 3** | IRQ 38. Genuine SP804, absent from the SDK headers |
+| `0x20150000` | 0x1000 each | GPIO0 … GPIO18 at `0x20150000 + n*0x10000` | IRQs 105–117, paired above GPIO6 |
+| `0x20300000` | 0x2000 | Cortex-A9 PERIPHBASE | See the offsets below |
+| `0x20400000` | 1152 KB | ARM debug (CoreSight) | |
+| `0x20580000` | 256 KB | VICAP — video capture | Documented; blocked by the external decoder |
+| `0x205C0000` | 64 KB (window) | VDP — video display | Documented |
+| `0x205D0000` | 64 KB (window) | HDMI transmitter | **No datasheet chapter** |
+| `0x205E0000` | 64 KB (window) | IVE — intelligent video engine | Documented |
+| `0x20600000` | 64 KB (window) | VPSS0 — scaler | Undocumented |
+| `0x20610000` | 64 KB (window) | TDE — 2D engine | Undocumented |
+| `0x20620000` | 64 KB (window) | VENC0 — H.264 encoder | Undocumented |
+| `0x20630000` | 64 KB (window) | VDH0 — H.264 decoder | Undocumented |
+| `0x20640000` | 64 KB (window) | VOIE — voice encoder | Documented. IRQ 102 |
+| `0x20660000` | 64 KB (window) | JPGE — JPEG encoder | Undocumented |
+| `0x20680000` | 64 KB (window) | VPSS1 | Undocumented |
+| `0x20690000` | 64 KB (window) | VENC1 | Undocumented |
+| `0x206A0000` | 64 KB (window) | VDH1 | Undocumented |
+| `0x206B0000` | 64 KB (window) | VCMP | Undocumented. IRQ 101 |
+| `0x206C0000` | 64 KB (window) | MD — motion detection | Documented |
+| `0x206D0000` | 64 KB (window) | BPD — bit-plane decoder | Undocumented |
+| `0x20700000` | 1 MB | L2 cache controller | HiSilicon L2 Cache V200, no mainline driver |
+| `0x20800000` | 64 KB (window) | PCIe0 controller registers | |
+| `0x20810000` | 64 KB (window) | PCIe1 controller registers | |
+| `0x30000000` | 256 MB | PCIe0 memory window | |
+| `0x40000000` | 256 MB | PCIe0 configuration space | |
+| `0x50000000` | 64 MB | NAND memory-mapped window | |
+| `0x58000000` | 64 MB | SPI flash memory-mapped window | |
+| `0x60000000` | 256 MB | PCIe1 memory window | |
+| `0x70000000` | 256 MB | PCIe1 configuration space | |
+| `0x80000000` | 1 GB | DDR0 | 512 MB fitted — see [02-memory-map.md](02-memory-map.md) |
+| `0xC0000000` | 1 GB | DDR1 | 512 MB fitted |
+
+### Three blocks identified from their PrimeCell IDs
+
+The datasheet names these but does not say whose IP they are. Reading
+`base+0xFE0`–`0xFF0` on the live device settles it, and two of the three have
+mainline drivers:
+
+| Base | PID0–3 | periphid | Part |
+|---|---|---|---|
+| `0x200C0000` | `22 10 04 00` | `0x00041022` | **ARM PL022** SPI |
+| `0x100D0000` | `80 10 14 0A` | `0x0A141080` | **ARM PL080** DMA, customer-modified |
+| `0x20130000`, `0x20140000` | `04 18 14 00` | `0x00141804` | **ARM SP804**, same as timers 0 and 1 |
+
+`0x200D0000` (hardware I²C), `0x100C0000` (CIPHER) and `0x100E0000` (SIO4) all
+read zero — HiSilicon blocks with no AMBA identity, like the GPIO controllers.
+
+**The SPI controller is free.** `0x00041022` matches `spi-pl022`'s plain ARM
+entry exactly, so `compatible = "arm,pl022", "arm,primecell"` on SPI 12 binds
+with no override. This board leaves the pins in GPIO mode and bit-bangs
+instead, so nothing currently uses it.
+
+> **The DMA controller is a trap.** Its periphid is `0x0A141080`, and
+> `amba-pl08x` lists that value with mask `0xffffffff` as **`vendor_pl080s` —
+> the Samsung PL080S**, ahead of the generic `0x00041080` entry. So an
+> `arm,pl080` node binds, but the driver applies Samsung's variant behaviour,
+> which differs in channel register layout. The `0x0A` in PID3 is the
+> customer-modified field, and HiSilicon's modifications having the same value
+> as Samsung's does not mean they are the same block. Verify before using DMA,
+> and expect to need either `arm,primecell-periphid = <0x00041080>` to force
+> the generic entry or a new table entry upstream. Nothing in a server build
+> needs DMA, so this can be left alone.
+
+There is **no eFuse register block**. The datasheet has eFUSE *pins* (section
+2.1.3.21) but nothing in the address map, so there is no OTP region to read.
+
+> **`0x200F0000` needs `0x25C`, not `0x200`.** This table previously gave the
+> pinmux block a `0x200` size, which stops at register 128 and silently
+> excludes everything above it — the NAND data pins, the SPI-NOR pins, USB
+> over-current and power, HDMI, and the SATA activity LEDs. A `syscon` node
+> covering the block should use `reg = <0x200f0000 0x1000>`.
 
 ### Vendor kernel IO mapping
 
@@ -226,41 +309,75 @@ this static mapping.
 
 ## Interrupt map
 
-From `/proc/interrupts` on the running device. All are GIC SPIs.
+**The complete SPI assignment**, from the datasheet's interrupt chapter (3.3).
+Earlier versions of this table listed only the lines that appear in
+`/proc/interrupts`, which is roughly a third of them and uses vendor driver
+names rather than the SoC's. The "Vendor name" column keeps those, so a line in
+`/proc/interrupts` can still be traced back.
 
-| IRQ | Source |
-|---|---|
-| 35 | System Timer Tick / Free Timer |
-| 40 | UART0 (`ttyAMA0`) |
-| 41 | UART1 |
-| 42 | UART2 |
-| 43 | UART3 (registered, idle) |
-| 48 | IR receiver (`Hi_IR`) |
-| 61 | HiSilicon DMAC |
-| 63 | EHCI (`ehci_hcd:usb1`) |
-| 64 | OHCI (`ohci_hcd:usb2`) |
-| 67 | SD/MMC (`hi_mci`) |
-| 68 | SATA / AHCI |
-| 69, 70, 71 | L2 cache — chk0, chk1, com |
-| 79, 80 | VPSS0, VPSS1 |
-| 88 | IVE |
-| 90 | VIU (video input) |
-| 91 | VOU (video output) |
-| 92, 93 | VEDU_0, VEDU_1 (H.264 encoders) |
-| 94 | JPEGU_0 |
-| 95 | x5_jpeg |
-| 96, 97 | VDEC, VDEC_1 |
-| 98 | TDE (2D engine) |
-| 100 | VDA (video detect/analysis) |
-| 101 | vcmp |
-| 102 | VOIE |
-| 103 | SCD |
-| 119 | Ethernet (`stmmaceth`) — shared by both MACs |
+DT SPI = IRQ − 32 throughout.
+
+| IRQ | SPI | Source | Vendor name in `/proc/interrupts` |
+|---|---|---|---|
+| 32, 33 | 0, 1 | COMMTX[0], COMMRX[0] | |
+| 34 | 2 | Watchdog (SP805) | |
+| 35 | 3 | **Timer0** (SP804) | System Timer Tick / Free Timer |
+| 36 | 4 | Timer1 | |
+| 37 | 5 | Timer2 | |
+| 38 | 6 | Timer3 | |
+| 39 | 7 | RTC (PL031) | |
+| 40–43 | 8–11 | **UART0–UART3** | `uart-pl011` |
+| 44 | 12 | SSP — hardware SPI (PL022) | |
+| 45 | 13 | Hardware I²C | |
+| 46 | 14 | NAND controller | |
+| 47 | 15 | SPI flash controller | |
+| 48 | 16 | IR receiver | `Hi_IR` |
+| 49–54 | 17–22 | SIO0–SIO5 — audio | |
+| 58 | 26 | Software interrupt | |
+| 59 | 27 | Cortex-A9 PMU 1 | |
+| 60 | 28 | CIPHER | |
+| 61, 62 | 29, 30 | **DMAC0, DMAC1** (PL080) | HiSilicon DMAC |
+| 63 | 31 | **USB EHCI** | `ehci_hcd:usb1` |
+| 64 | 32 | **USB OHCI** | `ohci_hcd:usb2` |
+| 67 | 35 | **SD/MMC/SDIO** | `hi_mci` |
+| 68 | 36 | **SATA** | |
+| 69–71 | 37–39 | L2 cache — chk0, chk1, combined | |
+| 72 | 40 | Cortex-A9 PMU 0 | |
+| 73–78 | 41–46 | PCIe0 — INTA–INTD, DMA0, DMA1 | |
+| 79, 80 | 47, 48 | VPSS0, VPSS1 | |
+| 81–86 | 49–54 | PCIe1 — INTA–INTD, DMA0, DMA1 | |
+| 87 | 55 | COMMRX[1] | |
+| 88 | 56 | IVE | |
+| 89 | 57 | HDMI | |
+| 90 | 58 | VICAP — video capture | VIU |
+| 91 | 59 | VDP — video display | VOU |
+| 92, 93 | 60, 61 | VEDU0, VEDU1 — H.264 encoders | |
+| 94 | 62 | JPGE — JPEG encoder | JPEGU_0 |
+| 95 | 63 | JPGD — JPEG decoder | x5_jpeg |
+| 96, 97 | 64, 65 | VDH0, VDH1 — H.264 decoders | VDEC, VDEC_1 |
+| 98 | 66 | TDE — 2D engine | |
+| 99 | 67 | BPD — bit-plane decoder | |
+| 100 | 68 | MD — motion detection | VDA |
+| 101 | 69 | VCMP | |
+| 102 | 70 | VOIE — voice encoder | |
+| 103, 104 | 71, 72 | SCD0, SCD1 | SCD |
+| 105–111 | 73–79 | **GPIO0 … GPIO6** | |
+| 112–117 | 80–85 | **GPIO7/8, 9/10, 11/12, 13/14, 15/16, 17/18** — paired | |
+| 118 | 86 | TOE low-power interrupt | |
+| 119 | 87 | **Ethernet** | `stmmaceth` |
+| 127 | 95 | COMMTX[1] | |
+
+IRQs 55–57, 65, 66 and 120–126 are reserved.
+
+Two corrections this table carries over its predecessor: **IRQ 100 is motion
+detection**, which the vendor driver calls VDA, and **103 and 104 are two
+separate start-code detectors**, where the vendor registers only one as "SCD".
 
 Inter-processor interrupts IPI0–IPI5 are the standard ARM SMP set.
 
-Note the SoC declares `NR_IRQS:128`. Only CPU0 services peripheral interrupts
-in the vendor configuration — every peripheral IRQ shows a zero count on CPU1.
+The SoC declares `NR_IRQS:128`, matching `GICD_TYPER`. Only CPU0 services
+peripheral interrupts in the vendor configuration — every peripheral IRQ shows
+a zero count on CPU1.
 
 ### The Cortex-A9 private peripheral region
 
@@ -356,7 +473,7 @@ Timekeeping is done by an **ARM SP804** dual timer, not by the Cortex-A9 private
 timer. `CONFIG_LOCAL_TIMERS` is *not* set in `godnet_defconfig`, so the TWD is
 left idle even though the hardware has it.
 
-**There are two SP804 blocks, and the vendor kernel uses only the first.** Both
+**There are four SP804 blocks, and the vendor kernel uses only the first.** Both
 of its internal timers are in play, at their two register windows inside the one
 1 KB block:
 
@@ -393,12 +510,24 @@ Note that the ÷2 is external to the block: the SP804's own prescale field
 (control bits 3:2) is zero, so 155 MHz is the frequency arriving at the timer
 and the rate a `clocks` property has to advertise.
 
-### The second SP804
+### The other three SP804 blocks
 
-`0x20010000` is a complete second SP804 with its own GIC line —
-`TIMER23_IRQ`, Linux IRQ 36, DT SPI 4 — which the vendor kernel never requests;
-IRQ 36 does not appear in `/proc/interrupts`. A port gets it as two spare
-32-bit timers if it ever wants them, and can ignore it otherwise.
+| Base | IRQ | DT SPI | In the SDK headers? |
+|---|---|---|---|
+| `0x20010000` | 36 | 4 | Yes, as `TIMER23_IRQ` |
+| `0x20130000` | 37 | 5 | **No** |
+| `0x20140000` | 38 | 6 | **No** |
+
+Timers 2 and 3 are named only in the datasheet's address map and interrupt
+table; `platform.h` and `irqs.h` stop at timer 1, which is why earlier drafts
+of this document recorded two blocks. All three read the same PrimeCell ID as
+timer 0 — `04 18 14 00`, part `0x804`, designer ARM — so they are genuine
+SP804s and take the same `arm,sp804` node with a different `reg` and
+`interrupts`.
+
+The vendor kernel requests none of them; IRQs 36, 37 and 38 do not appear in
+`/proc/interrupts`. That leaves **six spare 32-bit timers** for a port that
+wants them, and none of them needs to be described at all.
 
 ### Device tree
 
@@ -422,8 +551,8 @@ name — `of_clk_get(np, 0)` for timer 1, and `of_clk_get(np, 1)` for timer 2 on
 when the node declares three — so a single `clocks` entry feeding both timers is
 also valid. The names are carried because the binding asks for them.
 
-The second block, if you want it, is the same node at `0x20010000` with
-`interrupts = <0 4 4>`.
+The other three blocks are the same node with `reg` and `interrupts` changed:
+`0x20010000` on SPI 4, `0x20130000` on SPI 5, `0x20140000` on SPI 6.
 
 Because there is no per-CPU local timer, CPU1 receives its ticks by IPI: on the
 running device `IPI0 Timer broadcast interrupts` has ~2.58 M counts on CPU1 and
