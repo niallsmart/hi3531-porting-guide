@@ -151,7 +151,7 @@ The command byte is the same value as the `keyboard_realmcu_operation()` opcode:
 | 2 | Front-panel LEDs (5-bit field, mask `0x7C`) | **Observed** |
 | 4 | Alarm relay outputs (4-bit field, mask `0x0F`) | **Observed** |
 | 5 | Buzzer (0 = off, 1 = on) | **Observed** |
-| 6 | Unused by any named wrapper in this direction | From disassembly |
+| 6 | Spot-monitor channel select; data byte 1 is the channel | From disassembly |
 | 7 | Sent every 30 s unprompted; the watchdog kick | **Observed** |
 | 8 | Watchdog — the other branch of `wdg_set` | From disassembly |
 | 9 | Boolean flag | From disassembly |
@@ -167,7 +167,20 @@ direction** — it is not a shared opcode space. Read the start byte first:
 | 1 | MCU→SoC | Key event — see [Key events](#key-events) |
 | 5 | MCU→SoC | Status broadcast at 2 Hz — see [The MCU status broadcast](#the-mcu-status-broadcast) |
 | 5 | SoC→MCU | Buzzer |
+| 6 | SoC→MCU | Spot-monitor channel select |
 | 6 | MCU→SoC | Firmware version reply — see [Firmware version](#firmware-version) |
+
+Commands 5 and 6 are both reused this way, so two of the ten opcodes are
+direction-dependent. Treat the start byte as part of the message identity.
+
+**Spot channel select is probably dead code on this board.** The spot monitor
+is VOU device 3, driven by the Hi3531's own integrated CVBS DAC
+([12-video-output.md](12-video-output.md#cvbs-encoder)), so the SoC composes
+that output itself and has no reason to ask the MCU to switch it. The command
+has never appeared in any capture. `libhi3531.so` is shared across a family of
+boards, and on variants that route the spot output through an external analog
+mux the MCU would drive the select lines — which is the arrangement this
+command is shaped for.
 
 Commands 2 and 4 both read-modify-write a cached state word in the context
 (`+0x130` for LEDs, `+0x12c` for relays): bit 7 of the argument set means clear
@@ -531,9 +544,8 @@ broadcast. Sending `A0 0A 00 00 AA` to `/dev/ttyAMA1` produces:
 05:25:30.065846  read(7, "\x0a\x06\x97\x14\xbb", 5)    the reply, 49 ms later
 ```
 
-So **the reply comes back as command 6**, in the MCU direction. Command 6 is
-listed above as unused, which is correct for the SoC direction and was the
-wrong conclusion to draw about the command as a whole.
+So **the reply comes back as command 6**, in the MCU direction — the same
+opcode that selects the spot-monitor channel when the SoC sends it.
 
 The two data bytes are a packed date, not a version triple.
 `keyboard_realmcu_version_get` stores the payload and unpacks it as:
@@ -611,9 +623,8 @@ The extra RX frames accompanying each TX burst are the command echoes.
 - **Byte 2 of the status broadcast.** Constant `0xFF` in every frame captured,
   including during key presses and all four alarm inputs asserted.
 - **Commands 8, 9, 12, 13.** Named in the library but never seen on the wire, so
-  their data encodings rest on static analysis alone. Command 13 and the
-  two-byte LED command 12 are unused by this board; `spot_channel` is one of 9
-  or 13 and has not been pinned down.
+  their encodings rest on static analysis alone. Command 12 is the two-byte LED
+  variant this board never uses; 9 and 13 have no named wrapper at all.
 - **Whether the armed watchdog survives a reset it did not cause.** See
   [What is still open](#what-is-still-open).
 - **The MCU firmware.** It lives in the AT89S52's internal flash and is in no
