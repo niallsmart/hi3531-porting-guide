@@ -20,13 +20,8 @@ without speaking this protocol.
 
 ## Why there is an MCU at all
 
-The pattern is common on this class of hardware. The SoC's pins are consumed by
-DDR, video, SATA and Ethernet, and a front panel wants a lot of them — a button
-matrix, LEDs, a buzzer, four relay drivers. Scanning a key matrix and blinking
-LEDs is constant low-value work that a general-purpose OS handles awkwardly. And
-an MCU keeps running when Linux is not, which is what makes its watchdog useful:
-a watchdog inside the thing it is meant to reset is worth less than one outside
-it.
+The MCU concentrates the button matrix, LEDs, buzzer and relay drivers behind
+one UART and provides a watchdog independent of Linux.
 
 ## Two back-ends, one interface
 
@@ -90,10 +85,8 @@ and key events — start with `0x0A` instead.
 checksum as `cmd + d1 + d2 - 0x60`, which is the plain additive sum because
 `0xA0 ≡ -0x60 (mod 256)`.
 
-**The vendor sends every command twice, but the protocol does not require it.**
-Nothing in the frame format expresses repetition, and the MCU acknowledges each
-copy independently. The duplication is an artefact of how `serial_write` waits
-for the ack, and a clean implementation should not copy it — see
+The vendor usually sends commands twice because its acknowledgement handling
+races the reader thread; repetition is not part of the protocol. See
 [Why every command appears twice](#why-every-command-appears-twice).
 
 Each write is followed by a 2 ms sleep, then a 20 ms sleep after releasing the
@@ -103,44 +96,11 @@ wire. The library then checks whether the MCU has echoed the command back, and
 
 ### Why every command appears twice
 
-The ack is not read by the thread that sends. `serial_write` writes the frame,
-sleeps, then tests a context field that a separate reader thread fills in when it
-recognises the echo. Critically, the sentinel that field is compared against is
-set **once before the retry loop**, not per attempt:
-
-```
-mov  r2, #255
-str  r2, [r4, #0x128]     ; ctx[0x128] = 0xFF, before any attempt
-...
-ldr  r1, [r4, #0x128]
-cmp  r1, r6               ; == command?  -> success
-```
-
-Traced against a live watchdog frame, with the sleeps visible:
-
-```
-1148  04:08:11.073986  write(7, "\xa0\x07\x00\x00\xa7", 5) = 5
-1036  04:08:11.107266  read(7,  "\xa0\x07\x00\x00\xa7", 5) = 5   echo, +33 ms
-1148  04:08:11.112973  <... nanosleep resumed>                   ack check, +5.7 ms
-1148  04:08:11.137277  write(7, "\xa0\x07\x00\x00\xa7", 5) = 5   retry
-1036  04:08:11.208541  read(7,  "\xa0\x07\x00\x00\xa7", 5) = 5
-```
-
-The echo arrives before the check, but only barely — the reader thread has done
-the raw `read()` and not yet parsed the frame and recorded the ack. So the first
-attempt is judged failed and the loop retries. By the next pass the ack is
-recorded and the loop exits.
-
-**The repeat count varies**, which is the clearest evidence that this is the
-retry loop rather than a deliberate double-send: two copies is typical, but a
-command 2 frame was observed sent three times when the ack took longer to be
-recorded. The ceiling is the loop's four attempts.
-
-The vendor loses this race on nearly every frame, on a box that idles at a load
-average around 20. It is a bug of the harmless kind: the commands are
-idempotent, so the extra copies cost nothing but bus time.
-
-**Do not reproduce it.** Send once and wait for the echo; allow ~50 ms.
+`serial_write` checks an acknowledgement field populated asynchronously by the
+reader thread. It often checks after the echo has been read but before it has
+been parsed, so the retry loop sends again. Two copies are typical, three were
+observed once, and the loop permits four attempts. The commands are idempotent.
+A replacement should send once and wait about 50 ms for the echo.
 
 ### Command bytes
 
@@ -527,11 +487,9 @@ So `code = (column − 1) × 3 + row`. The eighth column has only two buttons,
 which predicts an unused position at `0x18`. That code was never seen and
 nothing on the panel produces it.
 
-Byte 3 distinguishes a tap from a hold. In a capture where each button was
-tapped once, 22 of 23 events carried `0x00`; the one exception was a button
-held slightly longer. In an earlier capture where two buttons were deliberately
-held for about a second, both carried `0x01`. Same key codes, different byte 3
-across the two runs, so it is not part of the code.
+Byte 3 distinguishes a tap from a hold. Of 23 taps, 22 carried `0x00`; the one
+button held slightly longer carried `0x01`. Two buttons deliberately held for
+about a second also carried `0x01`, so byte 3 is not part of the key code.
 
 **There is no auto-repeat.** A button held for two seconds produced exactly one
 frame, with byte 3 set. So `0x01` is emitted once, when the press crosses a
@@ -606,9 +564,7 @@ sharing the port. See [the MCU watchdog](#the-mcu-watchdog).
 
 ## Live observations
 
-`/proc/tty/driver/ttyAMA` exposes per-port TX and RX byte counters, which gives
-a non-invasive view of the link without opening the port or disturbing the
-vendor application:
+`/proc/tty/driver/ttyAMA` provides a non-invasive view without opening the port:
 
 ```
 1: uart:PL011 rev2 mmio:0x20090000 irq:41 tx:5590 rx:137570
@@ -625,21 +581,8 @@ triggered alarm that closed relay 1 and sounded the buzzer:
 | Background TX | 2 frames every 30 s |
 | The alarm event | 8 frames in ~2 s (4 + 4), with 3–4 extra RX frames alongside |
 
-Two things are confirmed from live traffic rather than from code. **The 5-byte
-frame size holds**: eight separate TX events over the run, 85 bytes total, every
-delta a multiple of 5. And the **idle RX rate of 10 bytes/s is exactly two
-frames per second**, so the MCU heartbeats at 2 Hz unprompted.
-
-The 30-second background exchange is 2 frames each time, at 8 s, 37 s, 67 s,
-96 s and 126 s. The later byte-level capture identified it as command 7 sent
-twice — the watchdog kick. It is *not* commands 7 and 8, which is what I had
-guessed from the two constants in `wdg_set`; those are separate branches.
-
-The eight-frame alarm burst also resolves cleanly against the captured bytes:
-four frames on assert (relay and buzzer, each sent twice) and four on release,
-two seconds apart, matching the 86 s / 88 s split exactly.
-
-The extra RX frames accompanying each TX burst are the command echoes.
+The counters corroborate the 5-byte frame size, the 2 Hz status broadcast, the
+30-second watchdog interval and the command echoes documented above.
 
 ## What is not yet established
 

@@ -23,15 +23,11 @@ muxctrl_reg103 is the multiplexing control register for the I2C_SCL pin.
 
 It covers **151 registers, `0x000` through `0x258`, with no gaps.**
 
-The vendor's `rootfs/mtd/modules/pinctrl_*_hi3531.sh` scripts carry the same
-information as trailing comments, and an earlier version of this document was
-built from them. Their **peripheral names are reliable** — every signal name in
-the function columns survived the comparison unchanged. Their **GPIO numbers
-are not**: they run three too high across the VIU0 block and three too low
-across the VIU2 block, giving 37 wrong GPIO labels in the 108 registers the
-scripts cover. Two more registers, the VGA pair at `0x0e4`/`0x0e8`, had their
-values transposed. The scripts remain the authority for one thing: which
-*value* the vendor writes.
+The vendor's `rootfs/mtd/modules/pinctrl_*_hi3531.sh` scripts carry similar
+information in trailing comments. Their **peripheral names are reliable**, but
+their **GPIO numbers are not**: 37 GPIO labels are shifted across the VIU0 and
+VIU2 blocks, and the VGA pair at `0x0e4`/`0x0e8` is transposed. Use the scripts
+only for the values the vendor writes.
 
 The "This board" column below is better evidence than either, being read from
 the running device.
@@ -117,8 +113,7 @@ Reading across it:
 
 - **`0x1bc`–`0x1ec` is the RGMII1 bus** — 13 pins at function 1: RXDV,
   RXD3–RXD0, RXCK, TXEN, TXD3–TXD0, TXCK and TXCKOUT, plus RXER and TXER at
-  `0x1f0`/`0x1f4`. Set in U-Boot and left alone by Linux. This is the run
-  previously recorded as an unidentified 13-pin bus. Only RGMII1's signals are
+  `0x1f0`/`0x1f4`. Set in U-Boot and left alone by Linux. Only RGMII1's signals are
   multiplexed against GPIO; RGMII0 has mux registers for just `TXCK`, `CRS` and
   `COL` at `0x1b0`–`0x1b8`, with the rest of its bus on dedicated pins — so
   these registers show RGMII1 is wired out but say nothing either way about
@@ -359,11 +354,9 @@ port.
 
 ## Notes for a port
 
-- Nothing here needs a pinctrl driver. The pins a server build cares about are
-  already correct at reset or set by U-Boot: RGMII1, the NAND and SPI-NOR
-  interfaces, the IR input and the I²C GPIOs. UART2, UART1 and the audio SIO
-  pins are the only ones Linux changes, and a port can write those four groups
-  directly.
+- Early server bring-up does not need a pinctrl driver. RGMII1, the flash
+  interfaces, IR and the I²C GPIOs are already correct at reset or set by
+  U-Boot. Optional UART1, UART2 and audio support must configure their pins.
 - The `stmmac` glue claims `0x200F0000`–`0x200F01FF` and rewrites pins at probe,
   so a mainline `syscon` node for this block should expect to share it.
 - The datasheet's section 2.1.6 and 2.1.7 give the same information organised by

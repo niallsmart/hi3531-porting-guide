@@ -44,7 +44,8 @@ not. This is the root cause of most gaps in this documentation.
 
 ### Unpacking the SDK archives
 
-Several parts ship as tarballs. The kernel is already extracted; U-Boot is not:
+Several parts ship as tarballs. The kernel and U-Boot are already extracted;
+to recreate the U-Boot tree:
 
 ```sh
 cd Hi3531_V100R001C01SPC0D1/01.software/board/Hi3531_SDK_V1.0.D.1
@@ -91,8 +92,8 @@ are often answered by a commented-out `himm` line.
 
 ## SDK verification
 
-`PLAN.md` asks that the SDK be confirmed as close to the device's original.
-It is — same generation, slightly newer release:
+The SDK is from the same generation as the device, but its MPP release is
+newer:
 
 | | Device | SDK |
 |---|---|---|
@@ -119,23 +120,8 @@ pass: 1001chin
 
 The device runs BusyBox. `devmem` is available, as are `himm`, `himd`, `himd.l` and `himc` — all symlinks to `/bin/btools`.
 
-A scripted wrapper lives in the working scratchpad as `dvr.exp`:
-
-```sh
-./dvr.exp "uname -a" "cat /proc/mtd" "dmesg"
-```
-
-Two details make this fiddly and are worth knowing before rewriting it:
-
-1. **Marker strings must not appear in the echoed command line.** The terminal
-   echoes what is typed, so a naive `echo END` marker matches on the echo rather
-   than the output. The script splits markers with shell concatenation
-   (`"EN""D"`) so the literal never appears in the typed line.
-2. **Never let a script run `himm`.** It is a memory *modify* tool: with one
-   argument it prints the value then waits at `NewValue:` for a write, so a
-   bare newline can write to the register. Use `devmem` or `himd.l` for
-   read-only access under Linux — see
-   [17-register-dumps.md](17-register-dumps.md).
+Never automate `himm`: it is a memory-modify tool. Use `devmem` or `himd.l` for
+read-only access; see [17-register-dumps.md](17-register-dumps.md).
 
 ### Serial console
 
@@ -145,7 +131,7 @@ Proxied through the Raspberry Pi at `192.168.4.34`:
 ssh -t raspberrypi "picocom -b 115200 --omap crcrlf --logfile dvr.log /dev/serial0"
 ```
 
-For scripted capture, two Python scripts live on the Pi:
+For scripted capture, four Python scripts live on the Pi:
 
 | Script | Purpose |
 |---|---|
@@ -158,14 +144,6 @@ All four end with `run bootcmd`, **which does not work** — see the pitfalls
 table. Fix them to send `reset` instead, or drive the prompt directly as below.
 
 Logs: `dvr-uboot*.log` and the stdout copies `uboot_capture*.out`.
-
-Usage pattern:
-
-```sh
-ssh raspberrypi "cd /home/niallsmart && nohup python3 -u uboot_capture2.py > uboot_capture2.out 2>&1 &"
-# then, from the host:
-./dvr.exp "sync; reboot"
-```
 
 The scripts send a key repeatedly from before the reset until `hisilicon #`
 appears, because `bootdelay` is only 1 second. **This is the part most likely
@@ -189,9 +167,7 @@ sys.stdout.write(out.decode('ascii','replace'))
 **Only one process may hold `/dev/serial0`.** Stop picocom before running the
 scripts.
 
-### Pitfalls encountered
-
-Recorded so they are not rediscovered:
+### Pitfalls
 
 | Symptom | Cause |
 |---|---|
@@ -202,7 +178,7 @@ Recorded so they are not rediscovered:
 | Interrupt script never detects the prompt | If the script matches on the tail of its buffer, unbroken spam pushes `hisilicon #` out of the window. Stop spamming as soon as any output arrives. |
 | Board resets on its own after ~1 min at the prompt | Observed repeatedly, despite U-Boot disabling the watchdog. Batch commands and keep sessions short. |
 | `himm` appears to hang | It is waiting at `NewValue:` for a write. |
-| `himd 0x200f0000` → `Bus error` | Use U-Boot `md` instead. |
+| `himd 0x200f0000` → `Bus error` | Use 32-bit `himd.l` under Linux or U-Boot `md`. |
 | DVR unreachable for ~30–60 s after reboot | The network comes up late, after the vendor app starts. |
 
 ## Backups
@@ -298,8 +274,7 @@ hardware on this SoC from the merely undriven.
 
 Base addresses are in
 [01-soc-overview.md](01-soc-overview.md#register-base-map). Section 1 of the
-datasheet carries its own address map, which covers more blocks than that
-table does.
+datasheet is the source for that table.
 
 Two quirks when searching it: the section headings for the watchdog and the
 NAND controller lost a space in typesetting and read `WatchDogRegister Summary`
@@ -382,5 +357,5 @@ module is also possible if something needs kernel-side visibility.
 
 ## Raspberry Pi
 
-Configuration changes made to the Pi during this work are logged separately in
-[raspberrypi-changes.md](raspberrypi-changes.md), as required by `PLAN.md`.
+Configuration changes made to the Pi are logged in
+[raspberrypi-changes.md](raspberrypi-changes.md).

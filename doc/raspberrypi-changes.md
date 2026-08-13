@@ -1,8 +1,6 @@
 # Raspberry Pi Configuration
 
-`PLAN.md` permits reconfiguring the Raspberry Pi and requires that all changes
-be recorded. This describes the host's current state and everything that was
-changed to reach it.
+This describes the host's current state and the changes made to reach it.
 
 ## Host
 

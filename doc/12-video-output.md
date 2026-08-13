@@ -1,7 +1,7 @@
 # Video Output
 
-Three output devices: a HD path carrying VGA and HDMI, and two standard-definition
-CVBS paths. Documented at wiring level per the agreed scope.
+Three output devices: an HD path carrying VGA and HDMI, and two
+standard-definition CVBS paths.
 
 ## Output devices
 
@@ -142,8 +142,7 @@ Linux starts — see [03-boot-chain.md](03-boot-chain.md).
 
 ## Assessment
 
-No mainline path, but the obstacles are not evenly distributed and the earlier
-blanket claim that none of these blocks is documented was wrong.
+There is no complete mainline path, but the VDP itself is documented.
 
 | Block | Base | Documented? |
 |---|---|---|
@@ -161,11 +160,6 @@ hardware scaling are out; a driver would be dumb-framebuffer scanout.
 That is a large project for a headless server, and the recommendation does not
 change. But "leave it alone because it is a server" is the reason, not "the
 hardware is undocumented".
-
-**800x600 is this board's configuration, not the hardware's ceiling.** The
-datasheet gives a maximum of **1080p60 for HDMI** and **2560x1600 at 60 Hz for
-VGA**. The observed mode comes from the vendor application choosing a timing
-that suits a 4-channel DVR view on both outputs at once.
 
 **Recommendation: leave video output alone.** Use the serial console and SSH.
 If a display is ever genuinely needed, VGA through VDP is the tractable path

@@ -136,12 +136,8 @@ uart0: serial@20080000 {
 };
 ```
 
-> The IRQ numbers in `/proc/interrupts` (40–43) are the vendor kernel's Linux
-> IRQ numbers. Mainline device trees express GIC SPIs with an offset (typically
-> `SPI n` = Linux IRQ `n + 32` in the vendor numbering, but this depends on how
-> `mach-godnet` maps them). **Verify the mapping against
-> `arch/arm/mach-godnet/` before writing the device tree** rather than assuming
-> the raw numbers transfer.
+The vendor IRQs 40–43 map to device-tree SPIs 8–11. See the verified
+[interrupt map](01-soc-overview.md#converting-to-device-tree-spi-numbers).
 
 ## Physical access
 

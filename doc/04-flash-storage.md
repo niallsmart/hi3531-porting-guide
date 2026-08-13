@@ -122,8 +122,8 @@ than the 3.46 MB image plus header.
 
 ## Mainline support
 
-**Neither controller has a mainline driver.** This is one of the two genuine
-blockers for a modern kernel (the other being the media pipeline).
+**Neither controller has a mainline driver.** A port can avoid both by loading
+the kernel over the network and using a non-flash root filesystem.
 
 Options, roughly in order of effort:
 
@@ -143,8 +143,7 @@ Options, roughly in order of effort:
    that would need forward-porting across ~15 years of MTD API change. Only
    worth it if you must boot from NAND.
 
-Since `PLAN.md` prohibits writing to SPI or NAND, options 1 and 2 are also the
-only ones available without relaxing that constraint.
+Under the no-flash-writes constraint, options 1 and 2 are the available routes.
 
 ## Backups
 

@@ -58,14 +58,9 @@ Only one of the five multiplier ports has a drive:
 | `ata2.03` | Link down |
 | `ata2.04` | Link down |
 
-**This means the board can host up to five drives on `ata2`, plus one directly
-on `ata1`.** For a repurposed server that is a genuinely useful amount of
-storage expansion, limited by SATA II bandwidth shared across the multiplier
-and by whatever physical connectors and power the chassis provides.
-
-> The number of physical SATA connectors on the board has not been established —
-> only the top surface was photographed. Worth checking before planning a
-> multi-drive build.
+The controller topology supports five drives on `ata2` plus one on `ata1`.
+The PCB has ten SATA footprints, but only two connectors are populated; usable
+expansion also depends on chassis power and cabling.
 
 ## Attached disk
 
@@ -128,18 +123,10 @@ Two things to check:
 2. **Port multiplier enablement.** Mainline requires `CONFIG_SATA_PMP`. It is
    not enabled in all defconfigs.
 
-## Why this matters for the port
+## Role in the port
 
-`PLAN.md` forbids writing to SPI or NAND, and neither flash controller has a
-mainline driver. Putting the root filesystem on SATA resolves both problems:
-
-- Keep the vendor U-Boot in SPI-NOR untouched.
-- Keep the vendor kernel in NAND untouched, so the DVR firmware remains
-  bootable as a fallback.
-- Put the root filesystem on the disk, and load the kernel over TFTP.
-
-This gives a reversible, low-risk path to a working general-purpose system.
-See [16-porting-roadmap.md](16-porting-roadmap.md).
+The recommended TFTP-kernel/SATA-root workflow is in
+[16-porting-roadmap.md](16-porting-roadmap.md).
 
 ## U-Boot cannot read the SATA disk
 

@@ -296,12 +296,9 @@ and ignores r1.
 
 ### Rebuilding U-Boot instead
 
-Adding `CONFIG_OF_LIBFDT` and `CONFIG_CMD_FDT` would give the documented
-`bootm <kernel> - <dtb>` handoff and a `fdt` command for editing the tree in
-place, which is genuinely nicer to iterate against. It is not worth it here: the
-new bootloader has to be written to SPI-NOR to be used, which the project
-constraints forbid and which carries the only real brick risk on the board. The
-appended DTB reaches the same place while writing nothing.
+Adding `CONFIG_OF_LIBFDT` and `CONFIG_CMD_FDT` would provide the documented
+`bootm <kernel> - <dtb>` handoff and a `fdt` command. It requires writing a new
+bootloader to SPI-NOR, while an appended DTB works without flash writes.
 
 Only once a kernel boots reliably from TFTP should flashing be considered — and
 at that point a hardware flash programmer for recovery becomes important, since

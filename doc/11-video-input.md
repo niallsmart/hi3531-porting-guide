@@ -1,8 +1,7 @@
 # Video Input Chain
 
-Per the agreed scope, this documents **how the video input hardware is wired and
-addressed**, so it could be revived later. It is not a guide to making the
-capture path work on a modern kernel — see
+This documents **how the video input hardware is wired and addressed**. It is
+not a guide to making the capture path work on a modern kernel — see
 [14-media-codec.md](14-media-codec.md) for why that is impractical.
 
 ## Signal path
@@ -173,8 +172,6 @@ likely for a DVR of this class, but this has not been confirmed.
 
 Two control paths exist:
 
-Two control paths exist:
-
 - **I²C**, via the shared bit-banged bus. The FPGA's I²C address was not
   captured at runtime.
 - **JTAG**, via `fpga_jtag.ko`, which bit-bangs TCK/TMS/TDI/TDO on GPIO pins.
@@ -304,14 +301,9 @@ this board is everything *in front of* VICAP: the analogue decoder and the FPGA
 that reformats its output into BT.1120. Neither can be programmed without
 documentation nobody has.
 
-The distinction matters for anyone reusing this SoC on a board that feeds
-VICAP from a documented source. See
+See
 [18-reference-assets.md](18-reference-assets.md#the-hi3531-datasheet--what-it-does-and-does-not-document)
-for what else the datasheet covers.
-
-What *is* recorded here — the I²C address, the chip identity, the BT.1120
-configuration, the channel mapping — is enough for someone to pick up the
-thread later, which is the purpose of this file.
+for the datasheet coverage map.
 
 For the server use case, the correct action is to leave the video input
 hardware unconfigured. It consumes no resources if its drivers are not loaded.

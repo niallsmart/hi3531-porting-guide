@@ -55,9 +55,9 @@ Three different numbers appear, all correct in their own context:
 | `total size=809984KB (791MB)` | `/proc/media-mem` | Sum of the three MMZ zones. |
 
 U-Boot's `CONFIG_NR_DRAM_BANKS` is 1 and `CFG_DDR_SIZE` is `256*1024*1024` in
-the *SDK* source. The device's U-Boot was built from a modified tree — it
-reports the same 256 MiB, so the vendor apparently never corrected it. Treat
-the U-Boot DRAM figure as meaningless.
+the *SDK* source. The device's U-Boot was built from a modified tree but reports
+the same incorrect 256 MiB constant. Treat the U-Boot DRAM figure as
+meaningless.
 
 ## MMZ (Media Memory Zone)
 
@@ -81,9 +81,8 @@ mem=224M console=ttyAMA0,115200 root=/dev/mtdblock2 rootfstype=yaffs2 \
   pcieclkext=0
 ```
 
-Because the two banks are non-contiguous with a large hole between them, a
-modern kernel should describe them as two separate `memory` nodes in the device
-tree rather than using a single `mem=` argument:
+Because the two banks are non-contiguous, a modern kernel should describe them
+as two `reg` entries in the device tree rather than using one `mem=` argument:
 
 ```dts
 memory@80000000 {

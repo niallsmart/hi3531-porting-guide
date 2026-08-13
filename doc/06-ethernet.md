@@ -240,7 +240,7 @@ mainline `stmmac` should be functionally equivalent. Ignore TNK entirely.
 
 ### The compatible string
 
-**Do not use `snps,dwmac-3.60a`.** An earlier sketch here did; it is not a value
+**Do not use `snps,dwmac-3.60a`.** It is not a value
 `Documentation/devicetree/bindings/net/snps,dwmac.yaml` accepts, so
 `dtbs_check` rejects it and no driver matches it. The binding's versioned
 strings jump from `snps,dwmac-3.50a` to `snps,dwmac-3.610`, with nothing for

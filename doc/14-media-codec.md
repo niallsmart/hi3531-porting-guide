@@ -1,7 +1,6 @@
 # Media Codec and MPP — Why This Is a Dead End
 
-Per the agreed scope, this is a short note explaining why the H.264 hardware is
-not a realistic porting target, rather than a deep dive.
+The H.264 hardware is not a realistic porting target.
 
 ## What is there
 
@@ -48,23 +47,9 @@ the media blocks, only headers and samples. They are compiled against kernel
 
 **2. There is no register documentation for the codec blocks.**
 
-This is specific, and worth stating precisely, because most of the SoC *is*
-documented. The Hi3531 datasheet gives a register summary and per-register
-descriptions for the great majority of its blocks — including video capture
-(VICAP) and video display (VDP). It does not for these:
-
-| Block | Chapter | What the chapter contains |
-|---|---|---|
-| VDH — H.264/MPEG decoder | 6.1 | Overview, function description, operating mode. No registers |
-| JPGD — JPEG decoder | 6.2 | Same |
-| VEDU — H.264 encoder | 7.2 | Overview, features, function description. No registers |
-| JPGE — JPEG encoder | 7.3 | Same |
-| TDE, VPSS, VCMP | 8.1–8.3 | Same |
-
-Every chapter that stops before its register sections is a block on the codec
-and graphics path. That is not an accident of drafting — it is the boundary of
-what HiSilicon published, and it falls exactly around the IP this document is
-about. The full coverage map is in
+The Hi3531 datasheet documents most of the SoC, including video capture (VICAP)
+and display (VDP), but omits register descriptions for the codec and graphics
+blocks. The full coverage map is in
 [18-reference-assets.md](18-reference-assets.md#the-hi3531-datasheet--what-it-does-and-does-not-document).
 
 **3. `hi3531_vfmw.ko` is 6.6 MB.**
@@ -88,10 +73,6 @@ HiSilicon SoCs have partial community support for their non-media blocks; none
 has a working open codec driver.
 
 ## What this means in practice
-
-For a general-purpose server, this is not a loss. The intended workloads —
-file serving, networking, general Linux — use the CPU, RAM, Ethernet and SATA,
-all of which port cleanly.
 
 **The correct action is to not load any MPP module.** Doing so:
 
@@ -117,8 +98,3 @@ Realistic options, none of which involve this hardware:
 - **Dual-boot.** Since the port is planned to live on the SATA disk with NAND
   untouched (see [16-porting-roadmap.md](16-porting-roadmap.md)), both remain
   available by changing U-Boot's boot command.
-
-## Assessment
-
-Documented as a dead end. Do not spend time here. Everything else in this
-documentation set is a better use of effort.

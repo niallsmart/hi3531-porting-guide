@@ -4,9 +4,8 @@ Small peripherals, grouped. None is on the critical path for booting, and none
 needs to be handled to get a kernel up — both watchdogs are inert unless
 something arms them.
 
-Two of these turned out to be standard ARM PrimeCells with mainline drivers,
-identified from their AMBA peripheral ID registers: the watchdog is an
-**SP805** and the on-chip RTC is a **PL031**.
+AMBA peripheral IDs identify the watchdog as an **SP805** and the on-chip RTC
+as a **PL031**, both with mainline drivers.
 
 The front-panel microcontroller, which also gates the alarm I/O described here,
 has its own file: [20-front-panel-mcu.md](20-front-panel-mcu.md).
@@ -40,8 +39,7 @@ same read against UART0 and Timer0 returned `0x011` (PL011) and `0x804`
 established, which validates the method.
 
 So **mainline `wdt-sp805` applies directly** — a device-tree node with
-`compatible = "arm,sp805"` and the APB clock is all that is needed. This was
-previously recorded as a guess.
+`compatible = "arm,sp805"` and the APB clock is all that is needed.
 
 Unlike the GPIO blocks, which have the PL061 register layout but no AMBA
 identity at all, the watchdog is a genuine PrimeCell and needs no
@@ -109,27 +107,11 @@ yourself early rather than assuming either way.
 
 ### There is a second watchdog
 
-The SP805 above is not the only one. The AT89S52 front-panel microcontroller
-holds its own, and unlike the SP805 **it is not disabled at boot** — the vendor
-application keeps it satisfied by sending `A0 07 00 00 A7` over `/dev/ttyAMA1`
-every 30 seconds, for as long as it runs.
-
-Stopping those kicks while the watchdog is armed **hard-resets the SoC about 60
-seconds later** — measured directly, with a full U-Boot banner on the console
-confirming a reset rather than a hang.
-
-**A port is not exposed to it.** The MCU shares the SoC's reset, so any reset
-clears the watchdog, and command 7 is *arm-or-kick*, so a kernel that never
-sends it never arms one. Neither a cold boot nor a reboot out of the vendor
-firmware can carry an armed watchdog into your kernel, and a mainline kernel has
-been run on this board without ever being reset.
-
-The case that does bite is killing the vendor application while leaving the
-kernel running — its `SIGTERM` handler exits cleanly but does not disarm the
-watchdog, so the board resets a minute later. That is a hazard for poking at a
-live board, not for porting. See
-[20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-watchdog) for the
-measurements and the frames to send.
+The AT89S52 front-panel MCU has a separate watchdog. Reset clears it, and the
+vendor application arms and kicks it over UART1. It is therefore irrelevant to
+a clean boot into a port, but killing the vendor application without resetting
+leaves it armed. Protocol and measurements are in
+[20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-watchdog).
 
 ## Real-time clock
 
@@ -276,9 +258,7 @@ PrimeCell.** The peripheral ID registers read all zeros:
 ```
 
 No part number, no designer, no PrimeCell signature — a HiSilicon block with no
-standard identity to match a mainline driver against. That settles what was
-otherwise a reasonable hope, given two of its neighbours turned out to be
-stock ARM IP.
+standard identity to match a mainline driver against.
 
 Mainline has no Hi3531 IR driver. For a server this is dispensable; if wanted,
 it would be a small `rc-core` driver, and the register layout would come from

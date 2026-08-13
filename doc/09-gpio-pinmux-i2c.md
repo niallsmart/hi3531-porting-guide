@@ -151,7 +151,7 @@ Helper routines present in the device's `gpioi2c.ko`:
 
 | Routine family | Target chip |
 |---|---|
-| `gpio_sil9024_i2c_{read,write}` | Silicon Image SiI9024 HDMI transmitter |
+| `gpio_sil9024_i2c_{read,write}` | Silicon Image SiI9024 HDMI transmitter (not populated) |
 | `gpio_ds1307_i2c_{read,write}` | DS1307-family RTC |
 | `gpio_fpga_i2c_{read,write}` | Lattice ECP3 FPGA |
 | `gpio_cx838_i2c_*` | Conexant CX838 (not populated) |
@@ -189,11 +189,6 @@ requires. This agrees with the SDK reference comment in
 
 The bit-banged driver addresses a pin as `base + (1 << pin) * 4`, the PL061
 masked-access scheme, with direction at `base + 0x400`.
-
-> Note for anyone extending this: **byte-scanning stripped ARM modules for
-> register base addresses does not work.** The constants sit in literal pools
-> at unaligned file offsets and a naive scan returns mostly false positives.
-> Use a real disassembler, or — as here — the vendor's own shell scripts.
 
 ## Other GPIO consumers
 

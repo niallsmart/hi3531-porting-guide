@@ -19,32 +19,11 @@ port.
 | **Firmware** | U-Boot 2010.06 (2012), Linux 3.0.8 (2013), HiSilicon MPP V1.0.7.3 |
 | **ODM** | TVT Digital — LTS is a rebadger |
 
-**The project looks viable.** The two subsystems that matter for a server —
-Ethernet and SATA — are standard licensed IP with mature mainline drivers. The
-CPU, memory and UART are equally conventional.
-
-**Three findings shape the work:**
-
-1. **~790 MB of RAM is reserved for the video pipeline.** Not loading
-   HiSilicon's MMZ allocator takes the machine from 224 MB to roughly 1 GB.
-   This is the single biggest win available — though the upper bank needs
-   `CONFIG_VMSPLIT_2G` to be reachable at all, and
-   `CONFIG_ARM_ATAG_DTB_COMPAT` will quietly undo the whole thing. See
-   [02-memory-map.md](02-memory-map.md#making-both-banks-usable).
-2. **Neither flash controller has a mainline driver**, but this does not block
-   anything — loading a modern kernel over TFTP with the existing vendor U-Boot
-   and putting the root filesystem on the SATA disk sidesteps both, satisfies
-   the no-flash-writes constraint, and leaves the original firmware intact as a
-   fallback. The kernel cannot be loaded from SATA itself: this U-Boot has no
-   `sata` command.
-3. **The H.264 codec path is a genuine dead end** — proprietary binary modules,
-   a 6.6 MB firmware blob, and the only chapters in the whole datasheet that
-   stop short of their register descriptions. The rest of the media hardware is
-   documented: video capture and video display both have full register maps,
-   and what blocks *those* is the undocumented analogue decoder and FPGA in
-   front of them, plus an undocumented on-chip HDMI transmitter behind. For a
-   server none of it is needed. See
-   [18-reference-assets.md](18-reference-assets.md#the-hi3531-datasheet--what-it-does-and-does-not-document).
+**The project looks viable.** CPU, memory, UART, Ethernet and SATA use
+conventional IP. The main constraints are the unusual DRAM layout, the lack of
+mainline flash-controller drivers, and the closed media stack. See
+[Memory Map](02-memory-map.md), [Porting Roadmap](16-porting-roadmap.md), and
+[Media Codec](14-media-codec.md).
 
 ## Table of contents
 
@@ -69,19 +48,20 @@ CPU, memory and UART are equally conventional.
 | # | Document | Contents |
 |---|---|---|
 | 11 | [Video Input](11-video-input.md) | Nextchip decoder, Lattice FPGA, BT.1120 into the VIU |
-| 12 | [Video Output](12-video-output.md) | VGA, HDMI via SiI9024, dual CVBS, framebuffer layers |
-| 13 | [Audio](13-audio.md) | TLV320AIC31, SIO/I²S, what is unconfirmed |
+| 12 | [Video Output](12-video-output.md) | Integrated VGA, HDMI and dual CVBS paths, framebuffer layers |
+| 13 | [Audio](13-audio.md) | NVP1104B codec, SIO/I²S, what is unconfirmed |
 | 14 | [Media Codec — Why This Is a Dead End](14-media-codec.md) | The MPP stack and why it cannot be ported |
 
 ### Reference
 
 | # | Document | Contents |
 |---|---|---|
-| 15 | [Product Identity and PCIe](15-product-identity.md) | TVT as the ODM, component inventory, unused PCIe |
-| 16 | [Porting Roadmap and Open Questions](16-porting-roadmap.md) | Phased plan, resolved and open questions, risks |
+| 15 | [Product Identity](15-product-identity.md) | TVT as the ODM, chassis label, component inventory |
+| 16 | [Porting Roadmap and Open Questions](16-porting-roadmap.md) | Phased plan, open questions, risks |
 | 17 | [Live Register Dumps](17-register-dumps.md) | Pinmux, CRG, SYS_CTRL and DDR controller dumps from the running board |
 | 18 | [Reference Assets and Capture Methods](18-reference-assets.md) | SDK layout, SDK verification, live access, pitfalls |
 | 19 | [Pin Multiplexing Map](19-pinmux-map.md) | All 151 IO_CONFIG registers from the chip datasheet, with what this board selects |
+| 21 | [PCI Express](21-pcie.md) | Two unused root complexes and the vendor cascade feature |
 | — | [Raspberry Pi Configuration Log](raspberrypi-changes.md) | Changes made to the serial-proxy host |
 
 ## Where to start
@@ -109,16 +89,7 @@ The remaining gaps, in order of impact:
 | **Only the top PCB surface is photographed** | SPI-NOR, NAND, RTC and regulators are unlocated on the board. |
 | **The SDK's board documentation is for HiSilicon's demo board** | Board-level detail comes from the device itself — live register reads and the vendor `pinctrl_*.sh` scripts. A TVT GPL source release would corroborate it. Chip-level detail does not have this problem: the SDK ships the full 1794-page Hi3531 datasheet. |
 | **`U16` is unidentified** | A 56-pin TI part beside the VGA/HDMI connectors. Not on any path a server build depends on. |
-| **No NVP1104B datasheet** | Only affects the video capture path, which is out of scope anyway. |
-
-[Porting Roadmap](16-porting-roadmap.md) carries a quick-reference table
-pointing to the answers most often needed.
-
-`PLAN.md` constraints observed throughout: **nothing was written to SPI or
-NAND.** The device was rebooted twice, with permission, to capture U-Boot state.
-Register reads were done from U-Boot's read-only `md` and from `devmem` under
-Linux — never from the vendor `himm` tool, which prompts for a write after
-every read.
+| **No full NVP1104B datasheet or register map** | Blocks the external video decoder and its integrated audio codec. |
 
 Full detail on gaps and next steps is in
 [Porting Roadmap and Open Questions](16-porting-roadmap.md).

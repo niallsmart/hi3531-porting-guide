@@ -281,11 +281,9 @@ instead, so nothing currently uses it.
 There is **no eFuse register block**. The datasheet has eFUSE *pins* (section
 2.1.3.21) but nothing in the address map, so there is no OTP region to read.
 
-> **`0x200F0000` needs `0x25C`, not `0x200`.** This table previously gave the
-> pinmux block a `0x200` size, which stops at register 128 and silently
-> excludes everything above it — the NAND data pins, the SPI-NOR pins, USB
-> over-current and power, HDMI, and the SATA activity LEDs. A `syscon` node
-> covering the block should use `reg = <0x200f0000 0x1000>`.
+> **`0x200F0000` needs at least `0x25C`.** A `0x200` size stops at register 128
+> and excludes the NAND, SPI-NOR, USB, HDMI and SATA-LED pins. A `syscon` node
+> should use `reg = <0x200f0000 0x1000>`.
 
 ### Vendor kernel IO mapping
 
@@ -310,10 +308,8 @@ this static mapping.
 ## Interrupt map
 
 **The complete SPI assignment**, from the datasheet's interrupt chapter (3.3).
-Earlier versions of this table listed only the lines that appear in
-`/proc/interrupts`, which is roughly a third of them and uses vendor driver
-names rather than the SoC's. The "Vendor name" column keeps those, so a line in
-`/proc/interrupts` can still be traced back.
+The "Vendor name" column maps the lines visible in `/proc/interrupts` back to
+the SoC sources.
 
 DT SPI = IRQ − 32 throughout.
 
@@ -369,9 +365,9 @@ DT SPI = IRQ − 32 throughout.
 
 IRQs 55–57, 65, 66 and 120–126 are reserved.
 
-Two corrections this table carries over its predecessor: **IRQ 100 is motion
-detection**, which the vendor driver calls VDA, and **103 and 104 are two
-separate start-code detectors**, where the vendor registers only one as "SCD".
+**IRQ 100 is motion detection**, which the vendor driver calls VDA. IRQs 103
+and 104 are separate start-code detectors; the vendor registers only one as
+"SCD".
 
 Inter-processor interrupts IPI0–IPI5 are the standard ARM SMP set.
 
@@ -519,11 +515,9 @@ and the rate a `clocks` property has to advertise.
 | `0x20140000` | 38 | 6 | **No** |
 
 Timers 2 and 3 are named only in the datasheet's address map and interrupt
-table; `platform.h` and `irqs.h` stop at timer 1, which is why earlier drafts
-of this document recorded two blocks. All three read the same PrimeCell ID as
-timer 0 — `04 18 14 00`, part `0x804`, designer ARM — so they are genuine
-SP804s and take the same `arm,sp804` node with a different `reg` and
-`interrupts`.
+table; `platform.h` and `irqs.h` stop at timer 1. All three read the same
+PrimeCell ID as timer 0 — `04 18 14 00`, part `0x804`, designer ARM — so they
+take the same `arm,sp804` node with different `reg` and `interrupts` values.
 
 The vendor kernel requests none of them; IRQs 36, 37 and 38 do not appear in
 `/proc/interrupts`. That leaves **six spare 32-bit timers** for a port that
