@@ -78,7 +78,7 @@ In rough order of value:
 | RTC | Low | `i2c-gpio` + `rtc-ds1307`, once pins are known |
 | SD/MMC | Medium | `dw_mmc` may fit; socket may not exist |
 | L2 cache | Medium | Forward-port the vendor `cache-hil2v200.c`; performance only, boots without it |
-| GPIO / front panel | Medium | Needs the pin assignments |
+| Front panel, buzzer, alarm relays | Medium | All behind the AT89S52 on `ttyAMA1`; frame format recovered, needs verifying |
 | Audio | High | Needs an ASoC platform driver written from scratch |
 | Video output | Very high | Proprietary VOU, no documentation |
 | Video capture | Impractical | See [11-video-input.md](11-video-input.md) |
@@ -104,11 +104,12 @@ Ranked by how much they would change the work.
    cross-reference. Not on any path a server build depends on.
 5. **The FPGA's I²C address and register map**, and what its bitstream
    implements. Only matters if the video capture path is ever revived.
-6. **The AT89S52 front-panel protocol.** Only matters if the front panel is
-   wanted.
-7. **The alarm I/O pin assignments.** The rear block exposes four relay outputs
-   and four alarm inputs, but which SoC GPIOs drive them is unknown. See
-   [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#alarm-io).
+6. **Verifying the AT89S52 protocol on the wire.** The frame format and the
+   command bytes are recovered from `libhi3531.so` — 5-byte binary frames, `0xA0`
+   start, additive checksum. What remains is confirming it against real traffic
+   and decoding the MCU's key-event replies. This is what stands between a
+   mainline port and the front panel, buzzer, alarm relays and alarm inputs. See
+   [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#wire-protocol).
 
 ## Quick reference
 
