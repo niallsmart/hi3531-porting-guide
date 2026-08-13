@@ -1,0 +1,111 @@
+#!/usr/bin/expect -f
+#
+# Front-panel LED scanner for the Hi3531 DVR — a Knight Rider style sweep.
+#
+# This is a worked example of the AT89S52 command 2 protocol documented in
+# doc/20-front-panel-mcu.md. It builds every frame from the LED bit map and
+# computes the checksums, rather than using a hardcoded frame table, so it
+# doubles as an executable check that the documented rules are right.
+#
+# Usage:
+#   ./led-scanner.exp [mode] [cycles] [delay] [host]
+#
+#   mode    comet (default) — head plus a one-LED trail
+#           single          — one LED lit at a time
+#   cycles  number of full left-right-left sweeps (default 10)
+#   delay   seconds between steps (default 0.28; busybox adds ~20 ms of
+#           loop overhead, so 0.28 lands at roughly 300 ms per step)
+#   host    DVR address (default 192.168.4.77)
+#
+# Notes:
+#   - The vendor application owns /dev/ttyAMA1 and will reassert its own LED
+#     state on its next update, so the effect is transient while it runs.
+#   - Writing concurrently puts two writers on one bus. The vendor's ack
+#     matching may see frames it did not send; this is harmless, the commands
+#     are idempotent.
+#   - The panel is restored to 0x60 (REC + HDD, the normal idle state) on exit.
+#   - TXDELTA is printed as a self-check: it must equal cycles x steps x 5,
+#     plus 5 for the restore frame. Any excess is the vendor application's own
+#     traffic, typically a 30-second watchdog kick sent two or three times by
+#     its retry race. A shortfall means frames were malformed.
+
+set mode   [expr {$argc > 0 ? [lindex $argv 0] : "comet"}]
+set cycles [expr {$argc > 1 ? [lindex $argv 1] : 10}]
+set delay  [expr {$argc > 2 ? [lindex $argv 2] : 0.28}]
+set host   [expr {$argc > 3 ? [lindex $argv 3] : "192.168.4.77"}]
+set user   "root"
+set pass   "1001chin"
+set dev    "/dev/ttyAMA1"
+
+# Physical panel order, left to right. The MCU bit order does not follow the
+# physical layout — see doc/20-front-panel-mcu.md#front-panel-leds.
+#   REC=bit5 HDD=bit6 BACKUP=bit2 NETWORK=bit3 PLAY=bit4
+set masks {0x20 0x40 0x04 0x08 0x10}
+set last  [expr {[llength $masks] - 1}]
+
+# Command 2 frame: A0 02 <bitmap> 00 <checksum>, checksum = sum of bytes 0-3.
+proc frame {bitmap} {
+    set ck [expr {(0xA0 + 0x02 + $bitmap) & 0xFF}]
+    return [format {\xa0\x02\x%02x\x00\x%02x} $bitmap $ck]
+}
+
+set seq {}
+switch -- $mode {
+    single {
+        for {set i 0} {$i <= $last} {incr i} {
+            lappend seq [frame [lindex $masks $i]]
+        }
+        for {set i [expr {$last - 1}]} {$i >= 1} {incr i -1} {
+            lappend seq [frame [lindex $masks $i]]
+        }
+    }
+    comet {
+        # Outbound: head with a trail behind it.
+        for {set i 0} {$i <= $last} {incr i} {
+            set bm [lindex $masks $i]
+            if {$i > 0} { set bm [expr {$bm | [lindex $masks [expr {$i - 1}]]}] }
+            lappend seq [frame $bm]
+        }
+        # Head alone at the far end, so the bounce does not stall for two steps.
+        lappend seq [frame [lindex $masks $last]]
+        # Return: trail now on the other side.
+        for {set i [expr {$last - 1}]} {$i >= 0} {incr i -1} {
+            set bm [expr {[lindex $masks $i] | [lindex $masks [expr {$i + 1}]]}]
+            lappend seq [frame $bm]
+        }
+    }
+    default {
+        puts stderr "unknown mode '$mode' (want: comet, single)"
+        exit 1
+    }
+}
+
+set steps  [llength $seq]
+set frames [join $seq " "]
+set expect_tx [expr {$cycles * $steps * 5 + 5}]
+
+puts "mode=$mode steps=$steps cycles=$cycles delay=$delay host=$host"
+
+set tmpl {D=@DEV@; S='@FRAMES@'; for f in $S; do printf "$f"; done | od -An -tx1 | tr -d '\n'; echo " ENCCHECK"; T0=$(sed -n 's/^1:.*tx:\([0-9]*\).*/\1/p' /proc/tty/driver/ttyAMA); echo ">>> SCANNING"; n=0; while [ $n -lt @CYCLES@ ]; do for f in $S; do printf "$f" > $D; sleep @DELAY@; done; n=$((n+1)); done; printf '\xa0\x02\x60\x00\x02' > $D; T1=$(sed -n 's/^1:.*tx:\([0-9]*\).*/\1/p' /proc/tty/driver/ttyAMA); echo "TXDELTA=$((T1-T0)) EXPECT=@EXPECT@"}
+
+set cmd [string map [list \
+    @DEV@    $dev \
+    @FRAMES@ $frames \
+    @CYCLES@ $cycles \
+    @DELAY@  $delay \
+    @EXPECT@ $expect_tx] $tmpl]
+
+set timeout [expr {int($cycles * $steps * ($delay + 0.2)) + 60}]
+
+spawn telnet $host
+expect "login:"
+send "$user\r"
+expect "Password:"
+send "$pass\r"
+expect "# "
+send $cmd
+send "\r"
+expect "TXDELTA="
+expect "# "
+send "exit\r"
+expect eof
