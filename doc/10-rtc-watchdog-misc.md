@@ -45,13 +45,18 @@ Stopping those kicks while the watchdog is armed **hard-resets the SoC about 60
 seconds later** — measured directly, with a full U-Boot banner on the console
 confirming a reset rather than a hang.
 
-It is one-shot, though: it fires, resets, and disarms, so there is no reset
-loop. And command 7 is *arm-or-kick*, so a kernel that never sends it appears
-never to arm the watchdog in the first place. A mainline port has been run on
-this board without ever being reset. Treat this as a signature to recognise
-rather than a duty to service. See
+**A port is not exposed to it.** The MCU shares the SoC's reset, so any reset
+clears the watchdog, and command 7 is *arm-or-kick*, so a kernel that never
+sends it never arms one. Neither a cold boot nor a reboot out of the vendor
+firmware can carry an armed watchdog into your kernel, and a mainline kernel has
+been run on this board without ever being reset.
+
+The case that does bite is killing the vendor application while leaving the
+kernel running — its `SIGTERM` handler exits cleanly but does not disarm the
+watchdog, so the board resets a minute later. That is a hazard for poking at a
+live board, not for porting. See
 [20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-watchdog) for the
-measurement, the remaining open case, and the frames to send.
+measurements and the frames to send.
 
 ## Real-time clock
 

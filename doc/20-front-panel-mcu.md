@@ -314,12 +314,14 @@ never disables the watchdog.
 it lives in the AT89S52, survives anything happening on the SoC, and is kept
 satisfied purely by the vendor application writing to a serial port.
 
-> **A hazard only once something arms it.** Command 7 is *arm-or-kick*. If the
-> watchdog has been armed and the kicks then stop, the MCU **hard-resets the SoC
-> about 60 seconds later** — measured, see below. But a kernel that never sends
-> command 7 has not been observed to provoke a reset, and a mainline port has
-> been run on this board without one. Do not assume you must service it; do
-> recognise the signature if you see it.
+> **Not a porting hazard, on the evidence.** Command 7 is *arm-or-kick*. Once
+> armed, stopping the kicks makes the MCU **hard-reset the SoC about 60 seconds
+> later** — measured. But a port is not exposed to it: a kernel that never sends
+> command 7 never arms the watchdog, and any SoC reset clears the MCU anyway, so
+> the arm cannot carry over from a vendor boot. A mainline kernel has been run on
+> this board without ever being reset. The sections below give the measurements;
+> the one situation that does bite is
+> [killing the vendor application without resetting](#the-one-way-to-get-bitten).
 
 #### The timeout, measured
 
@@ -344,34 +346,51 @@ asserts SoC reset rather than merely signalling. Nothing else could have caused
 it: `/dev/watchdog` was open by no process at the time, so the SP805 was not
 armed, and `inittab` has no respawn entry for the application.
 
-#### It does not stay armed after firing
+#### No reset loop
 
-The same capture rules out a reset loop. After the reset, the board took about
-150 seconds to come back — far longer than the 60-second timeout — and the
-vendor application cannot have resumed kicking until late in that boot. Yet the
+The same capture rules out a loop. After the reset the board took about 150
+seconds to come back — far longer than the 60-second timeout — and the vendor
+application cannot have resumed kicking until late in that boot. Yet the
 console shows **exactly one** `U-Boot 2010.06` banner and **one** `Linux
-version` line. No second reset occurred during a long unkicked stretch.
+version` line.
 
-So the watchdog is one-shot: it fires, resets the SoC, and disarms. Either the
-MCU clears it after firing, or the MCU shares the reset. Either way it has to be
-re-armed by a command 7 before it can fire again.
+The reason is the next section: the reset it asserted also cleared the MCU.
 
-That matches field experience on this board: a mainline kernel that never sends
-command 7 has been booted and run without any watchdog reset. **A port is
-probably not exposed to this at all**, and the mitigation frames are insurance
-rather than a requirement.
+#### A SoC reset clears the MCU
 
-#### What is still open
+The MCU shares the SoC's reset. Two observations establish it.
 
-Whether the armed state survives a reset the watchdog did *not* cause. If you
-boot the vendor firmware — arming the watchdog — and then reboot into your own
-kernel, does the arm carry across? The measurement above cannot answer that,
-because there the watchdog had just fired.
+**The LEDs.** Setting all five with `A0 02 7C 00 1E` and then resetting the SoC
+blanks them at the instant of reset — the MCU drops its output state — and they
+stay dark until the vendor application restarts and sets `0x60`. `POWER` stays
+lit throughout, being wired to the supply rather than driven.
 
-This is the one case where a port could still be bitten, and it is exactly the
-workflow a developer would use. Testing it means rebooting from the running
-vendor system, stopping at the U-Boot prompt, and waiting two minutes to see
-whether the board resets underneath the prompt.
+**A software reboot does not trigger the watchdog.** Issuing `reboot` from the
+running vendor system produced exactly one U-Boot banner, and the board then ran
+for five and a half minutes without another.
+
+The timing makes that decisive. The countdown runs from the last kick, which
+precedes the reboot by up to 30 seconds, so an armed watchdog would have fired
+roughly 30–60 seconds after the reboot began — comfortably inside a boot that
+takes 70 seconds or more to reach the network, and longer to reach the point
+where the vendor application resumes kicking. A second banner should have been
+unmissable. There was none.
+
+So **the arm does not survive a reboot**, and there is no dual-boot hazard: a
+developer who reboots from the vendor firmware into their own kernel gets a
+disarmed MCU.
+
+#### The one way to get bitten
+
+Killing the vendor application *without* resetting the SoC. The application has
+a clean `SIGTERM` handler — it prints `DVRService.cpp, 141 system exit!` and
+exits deliberately — but **that path does not disable the watchdog**. Sending
+`SIGTERM` and leaving the kernel running resets the board about 60 seconds
+later.
+
+That is a real trap for anyone exploring a live board, which is how it was
+found here. It is not a trap for a port: a port either never arms the watchdog,
+or reaches its own kernel through a reset that clears it.
 
 Two things are not established: the MCU's timeout (only that it exceeds 30
 seconds), and what it actually does when the timeout expires. Testing that means
@@ -625,8 +644,6 @@ The extra RX frames accompanying each TX burst are the command echoes.
 - **Commands 8, 9, 12, 13.** Named in the library but never seen on the wire, so
   their encodings rest on static analysis alone. Command 12 is the two-byte LED
   variant this board never uses; 9 and 13 have no named wrapper at all.
-- **Whether the armed watchdog survives a reset it did not cause.** See
-  [What is still open](#what-is-still-open).
 - **The MCU firmware.** It lives in the AT89S52's internal flash and is in no
   backup. Whether it can be read out depends on the part's lock bits.
 

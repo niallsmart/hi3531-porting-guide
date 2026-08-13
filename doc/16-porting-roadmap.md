@@ -44,13 +44,12 @@ The unknowns here are the GIC base within the Cortex-A9 private region
 (`0x20300000`) and the exact SPI numbering. Both come from the datasheet and
 from `arch/arm/mach-godnet/` in the SDK kernel.
 
-> **If the board resets almost exactly 60 seconds into an otherwise healthy
-> boot, suspect the MCU watchdog before suspecting your kernel.** Once armed,
-> the AT89S52 expects a frame on `ttyAMA1` every 30 seconds and hard-resets the
-> SoC if they stop — measured. It is one-shot rather than a reset loop, and a
-> kernel that never arms it has been run on this board without incident, so this
-> is most likely not your problem. If it is, writing `A0 08 00 00 A8` to
-> `/dev/ttyAMA1` at 9600 8N1 once turns it off. See
+> **The MCU watchdog is not something a port has to handle.** Once armed, the
+> AT89S52 hard-resets the SoC about 60 seconds after the kicks stop — measured —
+> but it is only armed by a command 7 the vendor application sends, and the MCU
+> shares the SoC's reset, so no armed state can survive into your kernel. A
+> mainline kernel has been run on this board without incident. It only bites if
+> you kill the vendor application while leaving the kernel up. See
 > [20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-watchdog).
 
 ## Phase 2 — Reclaim the memory
@@ -152,7 +151,7 @@ proprietary media pipeline, and the auto-update mechanism's image format.
 | Risk | Mitigation |
 |---|---|
 | SoC watchdog resets a kernel that does not service it | U-Boot disables it; keep it disabled or add the driver early |
-| **MCU watchdog** resets the board ~60 s in | Low risk: it only fires once armed, and a kernel that never sends command 7 has run without incident. If it bites, send `A0 07 00 00 A7` on `ttyAMA1` every 30 s, or `A0 08 00 00 A8` once to disable — see [20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-watchdog) |
+| **MCU watchdog** resets the board ~60 s in | Not a porting risk — it only fires once armed by command 7, and the MCU shares the SoC reset so no arm survives into a new kernel. Only bites if you kill the vendor app without rebooting — see [20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-watchdog) |
 | U-Boot auto-update reflashes from attached media | Understand `do_auto_update` before leaving USB media attached |
 | Repartitioning destroys recorded video | Confirm with the owner first; there is no disk backup |
 | A bad flash write bricks the board | Do not write flash until a programmer is on hand; backups exist in `backups/2026-08-03/` |
