@@ -12,7 +12,7 @@ than only the cited example; the "Changed" row lists them all.
 | # | Topic | Verdict | Commit |
 |---|---|---|---|
 | 1 | [U-Boot SATA loading](01-uboot-sata-loading.md) | **Confirmed** | `5835778` |
-| 2 | [Device-tree interrupt numbers](02-device-tree-interrupts.md) | **Confirmed** | |
+| 2 | [Device-tree interrupt numbers](02-device-tree-interrupts.md) | **Confirmed** | `0b2bdad` |
 | 3 | [SP804 timer topology](03-sp804-timer-topology.md) | Not yet investigated | |
 | 4 | [Device-tree handoff from U-Boot](04-device-tree-handoff.md) | Not yet investigated | |
 | 5 | [Access to the upper DRAM bank](05-upper-dram-bank.md) | Not yet investigated | |
@@ -259,9 +259,9 @@ cells: `<type, number, flags>`. For `type = 0` (SPI) the second cell is the
 interrupt ID. It is neither the GIC ID nor the number `/proc/interrupts` prints.
 
 This is a silent failure mode, which is why it is worth stating in the document
-rather than only fixing the examples. `interrupts = <0 40 4>` for UART0 is
-well-formed and requests SPI 40 — GIC ID 72, a different peripheral. Nothing
-warns; the console simply never takes an interrupt.
+rather than only fixing the examples. The tree compiles, `request_irq` succeeds
+on the wrong line, and the peripheral never interrupts — for a console UART,
+output that works and input that does not.
 
 ### The corrections
 

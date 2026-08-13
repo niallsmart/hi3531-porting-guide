@@ -326,9 +326,9 @@ In device-tree syntax these become `interrupts = <0 SPI 4>` — GIC type 0 (SPI)
 level-high (4).
 
 > **Use the DT SPI column, not the Linux IRQ column.** The `arm,gic` binding's
-> second cell is the SPI index, not the GIC interrupt ID and not the number
-> `/proc/interrupts` shows. Putting 40 there gets you SPI 40 — GIC ID 72, some
-> other peripheral entirely — and it will not fail loudly.
+> second cell is the SPI index, so it is the `/proc/interrupts` number minus 32.
+> Getting it wrong is silent: the tree compiles, `request_irq` succeeds on the
+> wrong line, and the peripheral simply never interrupts.
 
 **Every SPI on this SoC is level-sensitive**, so `4` (`IRQ_TYPE_LEVEL_HIGH`) is
 right for all of them. Read from the live GIC rather than assumed: the
