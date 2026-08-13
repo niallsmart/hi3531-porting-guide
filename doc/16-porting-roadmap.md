@@ -59,7 +59,13 @@ project, and it looks sound.
    boots without it. See
    [the L2 section](01-soc-overview.md#l2-cache-controller).
 3. Build with `earlycon` on the PL011 at `0x20080000`.
-4. Load over TFTP from the Raspberry Pi and boot with `bootm`, writing nothing.
+4. Build a **zImage** and append the DTB — `CONFIG_ARM_APPENDED_DTB=y`,
+   `CONFIG_ARM_ATAG_DTB_COMPAT=n`. This U-Boot has no FDT support whatever, so
+   there is no other way to deliver a device tree, and the `COMPAT` option is
+   the trap that quietly restores the vendor's 224 MB limit. Wrap the result
+   with `mkimage`. Recipe and reasoning in
+   [03-boot-chain.md](03-boot-chain.md#getting-a-device-tree-into-a-modern-kernel).
+5. Load over TFTP from the Raspberry Pi and boot with `bootm`, writing nothing.
 
 Success criterion: kernel output on `ttyAMA0` reaching "Kernel panic - not
 syncing: VFS: Unable to mount root filesystem", which means CPU, memory,
@@ -87,6 +93,11 @@ is tabulated in
 Describe both DRAM banks in the device tree and drop `mem=224M`. This should
 take the machine from 224 MB to around 1 GB. Verify the upper bound of each
 bank empirically — see the warning in [02-memory-map.md](02-memory-map.md).
+
+If the kernel still reports 224 MB after this, the cause is almost certainly
+`CONFIG_ARM_ATAG_DTB_COMPAT` being enabled: it overwrites the `/memory` node
+with U-Boot's single 256 MB `ATAG_MEM` and applies the vendor `bootargs` with
+`mem=224M`. Phase 1 step 4 turns it off for exactly this reason.
 
 ## Phase 3 — Ethernet
 
@@ -162,6 +173,7 @@ Where the answers to the most commonly needed questions live.
 | Where is the MAC address? | `/etc/init.d/mac.dat`; factory master at SPI-NOR `0xBFC20` | [04-flash-storage.md](04-flash-storage.md) |
 | Bit-banged I²C pins? | SDA = GPIO12_4, SCL = GPIO12_5 | [19-pinmux-map.md](19-pinmux-map.md) |
 | What does the board boot from? | SPI-NOR (`getinfo bootmode` → `spi`) | [03-boot-chain.md](03-boot-chain.md) |
+| How does the kernel get its DTB? | Appended to a zImage — this U-Boot has no FDT support. Keep `ARM_ATAG_DTB_COMPAT` off | [03-boot-chain.md](03-boot-chain.md#getting-a-device-tree-into-a-modern-kernel) |
 | Is the L2 cache a PL310? | No — HiSilicon L2 Cache V200, no mainline driver | [01-soc-overview.md](01-soc-overview.md#l2-cache-controller) |
 | Which timer drives the clock? | ARM SP804 at `0x20000000`, IRQ 35 — not the A9 TWD | [01-soc-overview.md](01-soc-overview.md#timers) |
 | Is the SoC watchdog portable? | Yes — confirmed ARM SP805, use `arm,sp805` | [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#the-ip-is-an-sp805) |
@@ -188,3 +200,4 @@ proprietary media pipeline, and the auto-update mechanism's image format.
 | Repartitioning destroys recorded video | Confirm with the owner first; there is no disk backup |
 | A bad flash write bricks the board | Do not write flash until a programmer is on hand; backups exist in `backups/2026-08-03/` |
 | SATA PHY init missing, disk never appears | Extract the sequence from the SDK kernel sources |
+| `ARM_ATAG_DTB_COMPAT` silently caps the machine at 224 MB | Leave it off. It overwrites the DT `/memory` node with U-Boot's fabricated single 256 MB bank and applies the vendor `mem=224M` — see [03-boot-chain.md](03-boot-chain.md#leave-arm_atag_dtb_compat-off-or-lose-three-quarters-of-the-ram) |

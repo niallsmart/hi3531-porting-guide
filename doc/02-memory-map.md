@@ -90,6 +90,13 @@ memory@80000000 {
 };
 ```
 
+> **This node only survives if `CONFIG_ARM_ATAG_DTB_COMPAT` is off.** With it on,
+> the decompressor overwrites `/memory` with U-Boot's `ATAG_MEM` — one bank of
+> 256 MB, a compile-time constant rather than a probe — and applies the vendor
+> `bootargs`, which start `mem=224M`. Either alone puts you back where you
+> started. See
+> [getting a device tree into a modern kernel](03-boot-chain.md#getting-a-device-tree-into-a-modern-kernel).
+
 ### Evidence for the bank sizes
 
 The 512 MB figure is measured. A write/read-back aliasing test from the U-Boot

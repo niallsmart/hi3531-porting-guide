@@ -13,8 +13,8 @@ than only the cited example; the "Changed" row lists them all.
 |---|---|---|---|
 | 1 | [U-Boot SATA loading](01-uboot-sata-loading.md) | **Confirmed** | `5835778` |
 | 2 | [Device-tree interrupt numbers](02-device-tree-interrupts.md) | **Confirmed** | `0b2bdad` |
-| 3 | [SP804 timer topology](03-sp804-timer-topology.md) | **Confirmed** | |
-| 4 | [Device-tree handoff from U-Boot](04-device-tree-handoff.md) | Not yet investigated | |
+| 3 | [SP804 timer topology](03-sp804-timer-topology.md) | **Confirmed** | `c17240e` |
+| 4 | [Device-tree handoff from U-Boot](04-device-tree-handoff.md) | **Confirmed** | |
 | 5 | [Access to the upper DRAM bank](05-upper-dram-bank.md) | Not yet investigated | |
 | 6 | [Secondary CPU startup](06-secondary-cpu-startup.md) | Not yet investigated | |
 | 7 | [Pinmux provenance and completeness](07-pinmux-map.md) | Not yet investigated | |
@@ -417,3 +417,89 @@ advertise — not 310 MHz with a divider.
 |---|---|
 | `doc/01-soc-overview.md` | Timers section rewritten: one block with two internal timers, the second block identified and marked unused, live control-register evidence, a DTS node, and the prescale note. Register-map and driver/evidence rows updated to match |
 | `doc/16-porting-roadmap.md` | Phase 1 step 2 now says one `arm,sp804` node at `0x20000000` on SPI 3, rather than both bases on IRQ 35 |
+
+---
+
+## 4. Device-tree handoff from U-Boot — **Confirmed**
+
+The installed U-Boot has no FDT support of any kind, so an appended DTB is the
+only route. Investigating it turned up a trap that would have cost most of the
+board's RAM.
+
+### No FDT support, confirmed three ways
+
+`include/configs/godnet.h` defines no `CONFIG_OF_LIBFDT`, and `boot_get_fdt()`
+is reachable only from `common/cmd_bootm.c:303` inside
+`#if defined(CONFIG_OF_LIBFDT)` — so `bootm <kernel> - <dtb>` ignores its third
+argument rather than failing.
+
+The handoff itself is decisive. `arch/arm/lib/bootm.c:149`:
+
+```c
+theKernel (0, machid, bd->bi_boot_params);
+```
+
+`bi_boot_params` is assigned once, at `board/godnet/board.c:101`, to
+`CFG_BOOT_PARAMS` = `0x80000100`. No path in this build puts a DTB address in
+r2. The live `help` output has no `fdt` command.
+
+**Two red-herring strings.** The SPI backup contains `Device Tree:` at `0x3BE96`
+and `Flat Device Tree` at `0x3C8B0`. The first is the header `usb tree` prints
+(`common/cmd_usb.c:578`); the second is a label in `uimage_type[]`
+(`common/image.c:140`), unconditional. Recorded in `doc/03` because a grep of
+the flash image is exactly how someone would talk themselves out of this
+conclusion — the same shape as the `SATA` string in item 1.
+
+### Answers to the specific questions
+
+| Question | Answer |
+|---|---|
+| How does the first modern kernel receive its DTB? | Appended to a zImage. There is no alternative short of replacing the bootloader |
+| Is `CONFIG_ARM_APPENDED_DTB` appropriate? | Yes — it is the only option. Note it lives in the decompressor, so the uImage must wrap a **zImage**, not the uncompressed `Image` the vendor ships |
+| Is `CONFIG_ARM_ATAG_DTB_COMPAT` needed to retain the U-Boot command line? | **No, and it must be left off** — see below |
+| Does this `bootm` understand a usable multi-image format? | `IH_TYPE_MULTI` is compiled in, but it is no help: without libfdt, r2 is always the ATAG pointer regardless of what the image contains |
+| Would rebuilding U-Boot with libfdt be preferable? | Technically nicer, practically no. The rebuilt bootloader has to be written to SPI-NOR to be used, which the project constraints forbid and which is the only real brick risk on the board |
+
+### The ATAG trap — it would have cost 800 MB
+
+`ARM_ATAG_DTB_COMPAT` reads as the obviously right option for an un-upgradable
+bootloader. On this board it silently reimposes the vendor's memory limit, by
+two independent routes:
+
+| Route | What U-Boot supplies | Effect |
+|---|---|---|
+| `ATAG_MEM` | One bank, `0x80000000`, 256 MB | `atags_to_fdt()` **overwrites** `/memory` `reg` wholesale. DDR1 vanishes, DDR0 halves |
+| `ATAG_CMDLINE` | `bootargs` beginning `mem=224M` | `early_mem()` clamps to 224 MB whatever the DT says |
+
+Both U-Boot figures are constants, not measurements: `dram_init()` at
+`board/godnet/board.c:130` assigns `bi_dram[0]` from `CFG_DDR_PHYS_OFFSET` and
+`CFG_DDR_SIZE` with no probe, `CONFIG_NR_DRAM_BANKS` is 1, and
+`setup_memory_tags()` emits that single bank. The board has 512 MB in each of
+two banks, measured.
+
+The overwrite is unconditional in
+`arch/arm/boot/compressed/atags_to_fdt.c` — `if (memcount) setprop(fdt,
+"/memory", "reg", …)` — so choosing `CMDLINE_EXTEND` over
+`CMDLINE_FROM_BOOTLOADER` does not rescue it. Those options govern only how
+`/chosen/bootargs` is merged, and `mem=224M` survives an extend just as it
+survives a replace. The net result of enabling `COMPAT` would be a kernel
+reporting 224 MB — the vendor's exact limit, arrived at silently, with the
+device tree's own `/memory` node discarded.
+
+With it off, the decompressor puts the appended DTB's address in r2 and the ATAG
+list is never read. The cost is that `setenv bootargs` stops having any effect,
+so the command line moves into the DTB's `/chosen`.
+
+`machid` is a non-issue either way: U-Boot passes `MACH_TYPE_GODNET` in r1, and
+a DT kernel matches on the root node's `compatible` and ignores it.
+
+### Changed
+
+| File | What |
+|---|---|
+| `doc/03-boot-chain.md` | New "Getting a device tree into a modern kernel" section: the no-FDT evidence, the two red-herring strings, the appended-DTB recipe, the `ATAG_DTB_COMPAT` analysis, `machid`, and why not to rebuild U-Boot |
+| `doc/02-memory-map.md` | Warning on the two-bank `memory` node that it only survives with `ARM_ATAG_DTB_COMPAT` off |
+| `doc/16-porting-roadmap.md` | New Phase 1 step 4 for packaging; Phase 2 names the option as the first thing to check if memory is still 224 MB; quick-reference row; risks-table entry |
+
+The `mkimage` recipe and the `0x82000000` load address are marked untested —
+nothing here has booted a mainline kernel, and that remains Phase 1's job.
