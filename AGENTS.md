@@ -61,4 +61,3 @@ You may reconfigure the raspberrypi as necessary. This includes installing packa
 You can assume the audience for the documentation you're creating in doc/ is a sophisticated and experienced kernel developer who is deeply familiar with the Linux kernel, the ARM processor architecture, porting concerns and supporting tooling.
 
 The user driving this session interactively is a Staff Backend Engineer. They have experience with system programming and operating systems, but are relatively new to embedded systems and kernel internals. Calibrate every interactive reply to that by default, not only when asked to explain: assume the systems knowledge, explain the embedded concepts, and build up from any conceptual pre-reqs. Keep it proportionate — a short aside where a term or assumption is unfamiliar, not a tutorial on every answer.
-
