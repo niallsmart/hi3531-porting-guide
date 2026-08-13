@@ -23,7 +23,7 @@ than only the cited example; the "Changed" row lists them all.
 | 10 | [DDR0 MMZ arithmetic](10-ddr0-mmz-arithmetic.md) | **Confirmed** | `a6ac3ed` |
 | 11 | [Ethernet DTS details](11-ethernet-dts.md) | **Confirmed** | `ac1f606` |
 | 12 | [Internal contradictions](12-internal-contradictions.md) | **Confirmed** (all four) | `a6ac3ed` |
-| 13 | [Register-map completeness](13-register-map-completeness.md) | **Confirmed** | |
+| 13 | [Register-map completeness](13-register-map-completeness.md) | **Confirmed** | `48b89cb` |
 
 ---
 
