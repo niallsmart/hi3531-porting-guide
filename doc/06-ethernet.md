@@ -14,7 +14,7 @@ of the best-supported subsystems on the board — `stmmac` is mainline and matur
 | Register base | `0x101C0000`, region `0x101C0000`–`0x101DFFFF` |
 | IRQ | 119 (shared by both MAC instances) |
 | Driver | `stmmac`, vendor version `201206191703` |
-| Checksum offload | Rx Checksum Offload Engine supported |
+| Checksum offload | Vendor reports Rx COE; disabled in the validated mainline port because the hardware feature register is unusable |
 | Platform device | `stmmaceth.0` |
 
 **Two MAC instances are present.** From the boot log, their mapped bases differ
@@ -27,6 +27,23 @@ by `0x4000`:
 
 Only `eth0` is wired to a connector. `eth1` exists in the SoC and is probed,
 but has no PHY and never comes up.
+
+The integration is not two independent DWMAC register windows. It is one
+shared block whose layout was recovered from the vendor driver and validated
+by the Linux 6.18 port:
+
+| Offset from `0x101C0000` | Function |
+|---|---|
+| `+0x0000` | GMAC0 control and shared MDIO registers |
+| `+0x4000` | GMAC1 control registers |
+| `+0x1000 + n * 0x100` | DMA channel `n`; GMAC1 uses channel 1 |
+| `+0x9000` | TNK interrupt aggregator |
+
+Generic `stmmac` therefore cannot drive the wired port merely by mapping
+`0x101C4000`: it expects its MAC, MDIO and DMA registers at fixed relative
+offsets. The Hi3531 glue keeps the shared base for MDIO, redirects MAC accesses
+to `+0x4000` and DMA accesses to channel 1, resets all three DMA channels after
+a warm boot, and enables only the GMAC1/DMA1 aggregator interrupt bits.
 
 The pinmux corroborates this. The whole **RGMII1** bus — RXDV, RXD3–RXD0,
 RXCK, TXEN, TXD3–TXD0, TXCK, TXCKOUT, plus RXER and TXER — is muxed to its
@@ -84,9 +101,9 @@ This agrees with the pinmux, where the bus muxed out to the PHY is **RGMII1**,
 not RGMII0 — see [19-pinmux-map.md](19-pinmux-map.md). GMAC1, RGMII1 and `eth0`
 are the same path, and a port only needs to describe that one.
 
-A port must reproduce the register write as a `syscon` phandle plus a
-`hisilicon,*` glue driver implementing `fix_mac_speed`, which is how mainline
-handles other DWMAC integrations (see
+A port must reproduce the register write in a `hisilicon,*` glue driver's
+`fix_mac_speed`, in addition to handling the shared-block integration above.
+This follows the pattern of other mainline DWMAC integrations (see
 `drivers/net/ethernet/stmicro/stmmac/dwmac-*.c` for the pattern). Note the
 shift: for `eth0` the fields are at bit 16, not bit 0.
 
@@ -232,9 +249,11 @@ The vendor kernel includes a TCP offload engine driver:
 **************************************************
 ```
 
-It runs in **BYPASS** mode, meaning offload is not active and the MAC behaves as
-a plain DWMAC1000. This is good news: there is nothing to reimplement, and
-mainline `stmmac` should be functionally equivalent. Ignore TNK entirely.
+It runs in **BYPASS** mode, meaning the TOE data path is not active and does not
+need to be reimplemented. The TNK block cannot be ignored completely, however:
+it is also the shared interrupt aggregator. The mainline glue writes `0x48` to
+its interrupt-enable register (`+0x9004`), selecting GMAC1 and DMA channel 1
+while leaving the TOE interrupt sources disabled.
 
 ## Device tree
 
@@ -246,43 +265,51 @@ mainline `stmmac` should be functionally equivalent. Ignore TNK entirely.
 strings jump from `snps,dwmac-3.50a` to `snps,dwmac-3.610`, with nothing for
 3.60.
 
-That gap costs nothing, because **the revision does not need to be in the
-device tree at all.** `stmmac` reads the version register at probe and keys its
-behaviour off `synopsys_id`. The versioned compatibles exist to set quirks that
-cannot be detected — `snps,dwmac-3.610`, for instance, implies `enh_desc`,
-`bugged_jumbo` and `force_sf_dma_mode` — and none of those has been shown to
-apply here.
+The revision does not need to be named in the device tree. `stmmac` reads the
+version register at probe, while the Hi3531 glue explicitly supplies the
+undetectable capabilities established on this integration. Enhanced
+descriptors are required. Checksum offload, jumbo frames and PMT/WOL remain
+disabled because CSR58 is unusable and those capabilities have not been
+validated. Forced TX store-and-forward must also remain disabled: with checksum
+offload off, target testing found that it wedges the TX DMA after a short burst.
 
 Two options, depending on how far the port has got:
 
 ```dts
-/* Bring-up: generic binding, no glue. Link speed is stuck at whatever
-   CRG+0xEC already holds, so force it and check traffic passes. */
+/* Diagnostic bring-up only. This can identify the core, but does not describe
+   the shared GMAC1/MDIO/DMA/TNK integration correctly. */
 compatible = "snps,dwmac";
 
-/* Proper: a new glue driver, with the generic fallback so the node still
-   probes if the glue is not built. */
-compatible = "hisilicon,hi3531-gmac", "snps,dwmac";
+/* Validated port: Hi3531 glue with the unversioned Synopsys fallback. */
+compatible = "hisilicon,hi3531-dwmac", "snps,dwmac";
 ```
 
-`hisilicon,hi3531-gmac` does not exist upstream. Adding it means a
+`hisilicon,hi3531-dwmac` does not exist upstream. Adding it means a
 `dwmac-hi3531.c` under `drivers/net/ethernet/stmicro/stmmac/` and a binding
 document that references `snps,dwmac.yaml` — the pattern every other vendor
-glue follows. Its whole job is `fix_mac_speed`: rewrite the GMAC1 field of
-`CRG + 0xEC` when the link changes.
+glue follows. The glue must implement the shared register layout, DMA reset and
+TNK mask described above as well as rewriting the GMAC1 field of `CRG + 0xEC`
+when the link changes. The generic fallback records the underlying IP identity;
+it is not a promise that the wired port works without the Hi3531 glue.
 
 ### The node
 
 ```dts
-gmac1: ethernet@101c4000 {
-    compatible = "hisilicon,hi3531-gmac", "snps,dwmac";
-    reg = <0x101c4000 0x2000>;
+gmac1: ethernet@101c0000 {
+    compatible = "hisilicon,hi3531-dwmac", "snps,dwmac";
+    reg = <0x101c0000 0x20000>,
+          <0x20030000 0x100>;
+    reg-names = "stmmaceth", "syscfg";
     interrupts = <0 87 4>;          /* SPI 87, level-high — vendor IRQ 119 */
     interrupt-names = "macirq";
+    clocks = <&peripheral_clk>;
+    clock-names = "stmmaceth";
     phy-mode = "rgmii";             /* matches the vendor; see above */
     phy-handle = <&phy1>;
-    hisilicon,crg = <&crg>;         /* for fix_mac_speed — proposed */
-    snps,pbl = <32>;                /* UNVERIFIED */
+    max-speed = <1000>;
+    local-mac-address = [00 18 ae 3c a2 49];
+    snps,pbl = <16>;
+    snps,no-pbl-x8;
 
     mdio {
         compatible = "snps,dwmac-mdio";
@@ -296,8 +323,9 @@ gmac1: ethernet@101c4000 {
 ```
 
 Named `gmac1` deliberately — this is GMAC1, the second instance, and the one
-wired to the connector. GMAC0 at `0x101C0000` has no PHY and can be left out of
-the tree entirely.
+wired to the connector. The unit address is nevertheless the shared block base,
+because the glue redirects the MAC data path to GMAC1 while retaining the
+shared MDIO window. GMAC0 has no PHY and is not exposed as a second netdev.
 
 The Realtek PHY needs no driver work; `drivers/net/phy/realtek/` already matches
 its ID.

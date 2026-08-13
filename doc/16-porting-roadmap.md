@@ -90,8 +90,18 @@ Two failure modes to recognise if the memory does not appear:
 `stmmac` on **GMAC1 at `0x101C4000`** — the second instance, which is the one
 wired to the connector. GMAC0 has no PHY; leave it out of the tree.
 
-Use `compatible = "snps,dwmac"` for bring-up. The required glue, pinmux and
-RGMII-delay caveat are in [06-ethernet.md](06-ethernet.md).
+Use `compatible = "hisilicon,hi3531-dwmac", "snps,dwmac"`, not
+`snps,dwmac-3.60a`, which the upstream binding does not accept. The pinmux needs
+nothing: RGMII1 is already muxed by U-Boot and Linux never touches it. The glue
+must redirect generic stmmac to GMAC1 and DMA channel 1 within the shared block,
+reset all three DMA channels after warm boot, mask the TNK aggregator to the
+GMAC1/DMA1 sources, and implement `fix_mac_speed` against `CRG + 0xEC` bits
+[31:16]. Use enhanced descriptors, but leave checksum offload, jumbo frames,
+PMT/WOL and forced TX store-and-forward disabled unless independently proven.
+
+See [06-ethernet.md](06-ethernet.md). If the link comes up but no traffic
+passes, that is RGMII delay, and it is a board-level strap question — no driver
+in this path can set it.
 
 Success criterion: DHCP and SSH.
 

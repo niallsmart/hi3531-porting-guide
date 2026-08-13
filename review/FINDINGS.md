@@ -1029,6 +1029,11 @@ the MCU watchdog.
 Both observations are correct: the DTS sketch contradicted its own prose on
 `phy-mode`, and `snps,dwmac-3.60a` is not an upstream-valid compatible.
 
+> **Later port validation refined the glue requirement.** Linux 6.18 target
+> testing confirmed that the wired GMAC1 is part of a shared MDIO, three-channel
+> DMA and TNK interrupt block. A speed callback alone is insufficient; see the
+> corrected shared-block description in `doc/06-ethernet.md`.
+
 ### Evidence
 
 **`snps,dwmac-3.60a` does not exist upstream.** `snps,dwmac.yaml` allows
@@ -1078,8 +1083,8 @@ CRG bit layout that had only been read out of SDK source. A glue driver's
 | Which PHY mode? | `rgmii`, matching the vendor — though nothing in the path acts on the distinction |
 | Where does the delay come from? | Not the MAC and not the PHY driver. Strapping or trace length; unconfirmed, and needs underside photographs or an MDIO read |
 | Which compatible matches the version register? | None exactly. The core is 3.60 and upstream has no such string. Use `snps,dwmac` |
-| What glue is required? | A `fix_mac_speed` writing `CRG + 0xEC` bits [31:16]. Pinmux needs nothing — RGMII1 is set by U-Boot and untouched by Linux |
-| Would a new binding be needed? | Yes for the glue: `hisilicon,hi3531-gmac`, with `snps,dwmac` as the fallback so the node still probes without it |
+| What glue is required? | Shared-base MDIO, GMAC1 and DMA1 register redirection, all-channel warm reset, TNK GMAC1/DMA1 interrupt masking, explicit capabilities, and `fix_mac_speed` writing `CRG + 0xEC` bits [31:16]. Pinmux needs nothing — RGMII1 is set by U-Boot and untouched by Linux |
+| Would a new binding be needed? | Yes: `hisilicon,hi3531-dwmac`, with `snps,dwmac` identifying the underlying IP. The shared layout still requires the glue |
 
 ### Changed
 
