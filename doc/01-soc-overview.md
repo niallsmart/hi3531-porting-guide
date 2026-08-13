@@ -43,6 +43,8 @@ third-party IP with existing mainline drivers:
 | SATA | AHCI 1.2 | `ahci_platform` |
 | USB | EHCI + OHCI | `ehci-platform`, `ohci-platform` |
 | SD/MMC | Synopsys DesignWare (`hi_mci`) | `dw_mmc` |
+| Watchdog | ARM SP805 (part `0x805`, designer ARM) at `0x20040000` | `arm,sp805` |
+| On-chip RTC | ARM PL031 (part `0x031`, designer ARM) at `0x20060000` | `arm,pl031` |
 
 Every row above was checked against the SDK sources *and* the running device,
 rather than inferred from the IP pairing. The evidence:
@@ -52,6 +54,9 @@ rather than inferred from the IP pairing. The evidence:
 | UART | AMBA peripheral ID at `0x20080FE0` = `0x11`, `0x10`, `0x24`, `0x00` → part `0x011`, designer `0x41` (ARM), rev 2 | `CONFIG_SERIAL_AMBA_PL011=y`; dmesg `ttyAMA0 at MMIO 0x20080000 (irq = 40) is a PL011 rev2` |
 | GIC | Distributor at `0x20301000`, CPU interface at `0x20300100` — the standard Cortex-A9 PERIPHBASE layout | `gic_init()` in `mach-godnet/core.c`; `/proc/interrupts` shows `GIC` for every line |
 | Timers | Peripheral ID at `0x20000FE0` → part `0x804` (SP804), designer ARM | `CONFIG_LOCAL_TIMERS` **not** set; SP804 register use in `core.c` |
+| Watchdog | Peripheral ID at `0x20040FE0` = `0x05`, `0x18`, `0x14`, `0x00` → part `0x805` (SP805), designer `0x41` (ARM), rev 1 | Vendor `wdt.ko`; U-Boot closes it before boot |
+| On-chip RTC | Peripheral ID at `0x20060FE0` = `0x31`, `0x10`, `0x04`, `0x00` → part `0x031` (PL031), designer `0x41` (ARM), rev 0 | None — the vendor system does not use it |
+| IR receiver | Peripheral ID at `0x20070FE0` reads all zeros — **not a PrimeCell**, no ARM identity | Vendor `hi_ir.ko`, banner `HISI_IRDA-MF` |
 | Ethernet | DWMAC version register `0x101C0020` = `0x00001036` → Synopsys ID **0x36** (DWMAC 3.6) | `CONFIG_STMMAC_ETH=m` with the upstream `drivers/net/stmmac/` tree incl. `dwmac1000_core.c` |
 | SATA | AHCI version register `0x10080010` = `0x00010200` → **AHCI 1.2** | `CONFIG_SATA_AHCI_PLATFORM=y`; dmesg `AHCI 0001.0200 32 slots 2 ports`, `scsi0 : ahci_platform` |
 | USB | dmesg `EHCI 1.00`, standard OHCI | `CONFIG_USB_EHCI_HCD`/`OHCI_HCD` cores wrapped by `hiusb-ehci.c` / `hiusb-ohci.c` |
@@ -173,10 +178,10 @@ writing a device tree.
 | `0x20000000` | 0x1000 | Timer 0 — ARM SP804 dual timer |
 | `0x20010000` | 0x1000 | Timer 1 — ARM SP804 dual timer |
 | `0x20030000` | 0x100 | CRG — clock and reset generator |
-| `0x20040000` | — | Watchdog |
+| `0x20040000` | 0x1000 | Watchdog — ARM SP805 |
 | `0x20050000` | — | System controller (SYS_CTRL) |
-| `0x20060000` | — | On-chip RTC |
-| `0x20070000` | — | IR receiver |
+| `0x20060000` | 0x1000 | On-chip RTC — ARM PL031 |
+| `0x20070000` | — | IR receiver — HiSilicon block, not a PrimeCell |
 | `0x20080000` | 0x1000 | UART0 (console) |
 | `0x20090000` | 0x1000 | UART1 |
 | `0x200A0000` | 0x1000 | UART2 |

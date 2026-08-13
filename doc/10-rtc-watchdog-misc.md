@@ -1,7 +1,12 @@
-# RTC, Watchdog, IR and Alarm I/O
+# RTC, Watchdog, IR, Alarm I/O and Other Small Peripherals
 
-Small peripherals, grouped. None is on the critical path for booting, but the
-watchdog can actively break a port if ignored.
+Small peripherals, grouped. None is on the critical path for booting, and none
+needs to be handled to get a kernel up — both watchdogs are inert unless
+something arms them.
+
+Two of these turned out to be standard ARM PrimeCells with mainline drivers,
+identified from their AMBA peripheral ID registers: the watchdog is an
+**SP805** and the on-chip RTC is a **PL031**.
 
 The front-panel microcontroller, which also gates the alarm I/O described here,
 has its own file: [20-front-panel-mcu.md](20-front-panel-mcu.md).
@@ -11,13 +16,34 @@ has its own file: [20-front-panel-mcu.md](20-front-panel-mcu.md).
 | Property | Value |
 |---|---|
 | Register base | `0x20040000` |
-| Driver | `wdt.ko`, vendor version `201206151658` |
+| IP | **ARM SP805** — confirmed, see below |
+| Mainline driver | `wdt-sp805`, compatible `arm,sp805` |
+| Vendor driver | `wdt.ko`, version `201206151658` |
 | Kernel driver banner | `Hisilicon Watchdog Timer: 0.01 initialized` |
-| Default margin | 60 seconds |
+| Vendor driver default margin | 60 seconds (a module parameter, not a hardware property) |
 | `nowayout` | 0 |
 | `nodeamon` | 0 |
 
-**U-Boot explicitly disables the watchdog before booting Linux:**
+### The IP is an SP805
+
+Read from the AMBA peripheral ID registers at the U-Boot prompt:
+
+```
+20040fe0: 00000005 00000018 00000014 00000000
+20040ff0: 0000000d 000000f0 00000005 000000b1
+```
+
+Part number is `0x05 | (0x8 << 8)` = **`0x805`**, designer `0x41` (ARM),
+revision 1, with the standard PrimeCell signature `0D F0 05 B1` at `0xFF0`. The
+same read against UART0 and Timer0 returned `0x011` (PL011) and `0x804`
+(SP804), matching what [01-soc-overview.md](01-soc-overview.md) already
+established, which validates the method.
+
+So **mainline `wdt-sp805` applies directly** — a device-tree node with
+`compatible = "arm,sp805"` and the APB clock is all that is needed. This was
+previously recorded as a guess.
+
+### U-Boot disables it before booting Linux
 
 ```
 close watch dog begin...............
@@ -26,13 +52,19 @@ test wdg 1
 dog_close
 ```
 
-This matters. If you replace the bootloader, or if something re-enables the
-watchdog and your kernel has no driver to pet it, the board will reset roughly
-60 seconds into boot — a failure mode that looks like a kernel hang and is easy
-to misdiagnose.
+The practical consequence is that Linux inherits a disabled watchdog and
+nothing has to service it.
 
-The IP is likely an ARM SP805, which mainline supports (`wdt-sp805`), but this
-has not been confirmed against the datasheet.
+Whether the block is *enabled coming out of reset* is not established. U-Boot
+closing it explicitly suggests something upstream — the boot ROM, most likely —
+turns it on, but a stock SP805 is disabled after reset, and the close happens
+during U-Boot init before the prompt is reachable, so there is no way to
+observe the prior state from here. If you replace the bootloader, disable it
+yourself early rather than assuming either way.
+
+Note also that the 60-second figure in the table is the *vendor Linux driver's*
+module parameter. It says nothing about the hardware timeout that would apply
+with no driver loaded.
 
 ### There is a second watchdog
 
@@ -62,10 +94,33 @@ measurements and the frames to send.
 
 There are **two** RTCs in play.
 
-### On-chip RTC
+### On-chip RTC — an ARM PL031
 
-The SoC has an RTC block at `0x20060000`. The vendor system does not appear to
-use it as the system clock source.
+| Property | Value |
+|---|---|
+| Register base | `0x20060000` |
+| IP | **ARM PL031** |
+| Mainline driver | `rtc-pl031`, compatible `arm,pl031` `arm,primecell` |
+| Used by the vendor system | No |
+
+From the peripheral ID registers:
+
+```
+20060fe0: 00000031 00000010 00000004 00000000
+20060ff0: 0000000d 000000f0 00000005 000000b1
+```
+
+Part `0x031`, designer `0x41` (ARM), revision 0 — a PL031, which mainline has
+supported for years.
+
+This is worth knowing before reaching for the external chip. A PL031 node gives
+a working `/dev/rtc0` with standard `hctosys` behaviour and no bit-banged I²C
+at all. **It has no battery backup**, being on-die, so it does not survive a
+power cycle — but it does survive a warm reset, and paired with NTP it is
+enough for most server use. The battery-backed external chip below is what you
+want if the clock has to be right at cold boot with no network.
+
+The vendor system ignores it entirely.
 
 ### External RTC
 
@@ -122,23 +177,39 @@ boot — the clock was already ~30 minutes fast when it was set. This is a
 constant error inherited from the RTC chip, which was presumably never set
 accurately.
 
+Confirmed a day later, across several reboots: the offset measured 1766–1769 s,
+against 1774 s originally. It is stable to within a few seconds and survives
+power-cycling, which is what an error stored in a battery-backed chip looks
+like. It is not drift, and it is not a boot-time accident.
+
 ### How system time actually gets set
 
 Two things are worth knowing before porting:
 
-- **The kernel never touches the RTC.** There is no `/sys/class/rtc` and no
+- **The kernel never touches either RTC.** There is no `/sys/class/rtc` and no
   `/dev/rtc*` — only the vendor char device `/dev/ds1307` (major 50). The
-  standard `hctosys` path does not exist on this system.
+  standard `hctosys` path does not exist on this system, and the on-chip PL031
+  is not driven at all.
 - **Userspace sets the clock.** The vendor application reads the chip through
   that char device and calls `settimeofday()` itself.
 - **Nothing corrects it afterwards.** `/usr/sbin/ntpd` is present in the
   filesystem but no NTP process is running.
 
-For a port, mainline `rtc-ds1307` over `i2c-gpio` should work once the SDA/SCL
-pins are known (see [09-gpio-pinmux-i2c.md](09-gpio-pinmux-i2c.md)). That gives
-a proper `/dev/rtc0` with standard `hctosys` behaviour and correct BCD handling
-— strictly better than the vendor arrangement. Set the chip once to a correct
-time, then run NTP.
+For a port there are two options, and neither is blocked.
+
+**The on-chip PL031** is the simpler one — a device-tree node and nothing else.
+No battery backup, so it needs setting at every cold boot.
+
+**The external chip** via mainline `rtc-ds1307` on `i2c-gpio`. The pins are
+known: **SDA = GPIO12_4, SCL = GPIO12_5**, established from the vendor pinctrl
+scripts and corroborated by an SDK reference comment — see
+[19-pinmux-map.md](19-pinmux-map.md#the-i²c-pins), which carries a
+ready-made `i2c-gpio` fragment. What is *not* known is the exact part, so
+whether `rtc-ds1307` binds cleanly has to be tried.
+
+Either gives a proper `/dev/rtc0` with standard `hctosys` behaviour and correct
+BCD handling — strictly better than the vendor arrangement. Set the chip once
+to a correct time, then run NTP.
 
 ## Infrared receiver
 
@@ -154,6 +225,19 @@ The SoC has a dedicated IR block. The banner references Hi3520, so the driver
 is shared across the vendor's SoC family.
 
 Zero interrupts had been taken at capture time — the remote had not been used.
+
+**Unlike the watchdog and the on-chip RTC, this is not a licensed ARM
+PrimeCell.** The peripheral ID registers read all zeros:
+
+```
+20070fe0: 00000000 00000000 00000000 00000000
+20070ff0: 00000000 00000000 00000000 00000000
+```
+
+No part number, no designer, no PrimeCell signature — a HiSilicon block with no
+standard identity to match a mainline driver against. That settles what was
+otherwise a reasonable hope, given two of its neighbours turned out to be
+stock ARM IP.
 
 Mainline has no Hi3531 IR driver. For a server this is dispensable; if wanted,
 it would be a small `rc-core` driver, and the register layout would come from
@@ -217,8 +301,9 @@ harm the input: it is a supported steady state.
 over the serial link on `/dev/ttyAMA1`:
 `keyboard_realmcu_alarm_output_set` drives the relays (command 4) and
 `keyboard_realmcu_alarm_status_get` reads the inputs. The relay bank sits
-directly beside the MCU on the board, which fits. The buzzer is on the same
-path.
+directly beside the MCU on the board, which fits. The buzzer (BZ1) is on the
+same path, as command 5 — `A0 05 01 00 A6` sounds it and `A0 05 00 00 A5`
+silences it.
 
 Reading the inputs is not a wire transaction. The MCU broadcasts their state
 twice a second unprompted, and `alarm_status_get` returns what the library's

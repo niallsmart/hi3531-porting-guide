@@ -81,9 +81,9 @@ In rough order of value:
 
 | Item | Effort | Notes |
 |---|---|---|
-| Watchdog | Low | Probably SP805; guard against surprise resets |
+| Watchdog | Low | Confirmed ARM SP805 — `arm,sp805` node and the APB clock |
 | USB | Low–medium | Standard EHCI/OHCI, needs PHY glue |
-| RTC | Low | `i2c-gpio` + `rtc-ds1307`, once pins are known |
+| RTC | Low | On-chip PL031 (`arm,pl031`) is trivial but has no battery. Battery-backed external chip needs `i2c-gpio` + `rtc-ds1307`; pins are known |
 | SD/MMC | Medium | `dw_mmc` may fit; socket may not exist |
 | L2 cache | Medium | Forward-port the vendor `cache-hil2v200.c`; performance only, boots without it |
 | Front panel, buzzer, alarm relays | Low–medium | All behind the AT89S52 on `ttyAMA1`. Protocol fully recovered and verified on the wire — userspace serial, no kernel driver needed |
@@ -134,6 +134,8 @@ Where the answers to the most commonly needed questions live.
 | What does the board boot from? | SPI-NOR (`getinfo bootmode` → `spi`) | [03-boot-chain.md](03-boot-chain.md) |
 | Is the L2 cache a PL310? | No — HiSilicon L2 Cache V200, no mainline driver | [01-soc-overview.md](01-soc-overview.md#l2-cache-controller) |
 | Which timer drives the clock? | ARM SP804 at `0x20000000`, IRQ 35 — not the A9 TWD | [01-soc-overview.md](01-soc-overview.md#timers) |
+| Is the SoC watchdog portable? | Yes — confirmed ARM SP805, use `arm,sp805` | [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#the-ip-is-an-sp805) |
+| Is there an RTC with a mainline driver? | Yes — on-chip ARM PL031, but no battery backup | [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#on-chip-rtc--an-arm-pl031) |
 | Where does the rear RS485 go? | UART2 / `ttyAMA2` at `0x200A0000`, IRQ 42, 9600 | [05-uart-console.md](05-uart-console.md#rs485-rear-panel) |
 | How do I read the front-panel keys? | Parse `0A 01 <code> <hold>` on `ttyAMA1`; 23 codes mapped | [20-front-panel-mcu.md](20-front-panel-mcu.md#key-codes) |
 | How do I read the alarm inputs? | Don't poll — the MCU broadcasts them at 2 Hz, active low | [20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-status-broadcast) |
