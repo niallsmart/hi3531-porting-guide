@@ -19,6 +19,9 @@ rootfs/
 # PCB photographs (36 MB)
 pcb/
 
+# Reference datasheets retained locally
+datasheets/
+
 # macOS cruft
 .DS_Store
 ._*
