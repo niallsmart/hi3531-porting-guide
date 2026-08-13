@@ -41,10 +41,17 @@ holds its own, and unlike the SP805 **it is not disabled at boot** — the vendo
 application keeps it satisfied by sending `A0 07 00 00 A7` over `/dev/ttyAMA1`
 every 30 seconds, for as long as it runs.
 
-A mainline kernel will not do that, so the kicks stop. The consequences are
-undetermined, but a companion-MCU watchdog usually resets the SoC. See
-[20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-watchdog) for the frames
-to send, including the one that disables it.
+Stopping those kicks while the watchdog is armed **hard-resets the SoC about 60
+seconds later** — measured directly, with a full U-Boot banner on the console
+confirming a reset rather than a hang.
+
+It is one-shot, though: it fires, resets, and disarms, so there is no reset
+loop. And command 7 is *arm-or-kick*, so a kernel that never sends it appears
+never to arm the watchdog in the first place. A mainline port has been run on
+this board without ever being reset. Treat this as a signature to recognise
+rather than a duty to service. See
+[20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-watchdog) for the
+measurement, the remaining open case, and the frames to send.
 
 ## Real-time clock
 
@@ -170,6 +177,35 @@ pair.
 The RS485 terminals on the upper row belong to UART2, not to the alarm
 subsystem; see [05-uart-console.md](05-uart-console.md#terminal-block).
 
+### Alarm inputs are dry contact, active low
+
+Measured on the terminal block, and consistent from three directions:
+
+| Property | Value |
+|---|---|
+| Open-circuit voltage | 5.2 V (pull-up) |
+| Trigger | Short to ground |
+| Resting state | Pulled high |
+| Reported as | Active-low bitmap, bit 0 = input 1 |
+
+There is **no common or ground terminal anywhere on the block** — all 16
+positions are alarm-out, RS485 or alarm-in. Four terminals for four channels
+with no shared return means each input must be referenced to the DVR's own
+ground, which rules out isolated voltage-sensing inputs. The chassis label
+independently specifies the inputs as "NO or NC", and a contact carries no
+voltage of its own. The 5.2 V measurement completes the picture.
+
+So a sensor triggers an input by closing a contact to chassis ground. Nothing
+should apply a voltage to these pins; if they connect straight to the MCU, more
+than Vcc+0.5 V risks damaging it. Whether a series resistor, clamp or opto sits
+between the terminals and the MCU is unverified — that needs the traces around
+`U32` followed, and only the top surface is photographed.
+
+The NO/NC setting in the DVR's configuration does not change the electrical
+behaviour, only the interpretation. An input declared NC rests shorted to
+ground and alarms when the contact opens, which is also why a short cannot
+harm the input: it is a supported steady state.
+
 ### How the relays and inputs are reached
 
 **Not by SoC GPIOs.** The alarm I/O goes through the AT89S52 microcontroller,
@@ -178,6 +214,11 @@ over the serial link on `/dev/ttyAMA1`:
 `keyboard_realmcu_alarm_status_get` reads the inputs. The relay bank sits
 directly beside the MCU on the board, which fits. The buzzer is on the same
 path.
+
+Reading the inputs is not a wire transaction. The MCU broadcasts their state
+twice a second unprompted, and `alarm_status_get` returns what the library's
+reader thread last cached — see
+[the status broadcast](20-front-panel-mcu.md#the-mcu-status-broadcast).
 
 That changes the cost of using them from a mainline kernel: not `gpio-pl061`
 plus pin numbers, but a userspace implementation of the MCU protocol. Four relay

@@ -82,8 +82,8 @@ Frames are **binary and fixed at 5 bytes**, in both directions:
 
 **The start byte encodes direction.** `0xA0` marks a frame the SoC sent, and the
 MCU acknowledges by echoing that frame back byte-for-byte, so `0xA0` appears in
-both directions. Frames the MCU raises on its own — the idle heartbeat, and
-presumably key events — start with `0x0A` instead.
+both directions. Frames the MCU raises on its own — the 2 Hz status broadcast
+and key events — start with `0x0A` instead.
 
 `keyboard_realmcu_serial_write(ctx, cmd, d1)` emits a frame with byte 3 zero;
 `serial_write_ex(ctx, cmd, d1, d2)` fills both data bytes. Both compute the
@@ -151,13 +151,23 @@ The command byte is the same value as the `keyboard_realmcu_operation()` opcode:
 | 2 | Front-panel LEDs (5-bit field, mask `0x7C`) | **Observed** |
 | 4 | Alarm relay outputs (4-bit field, mask `0x0F`) | **Observed** |
 | 5 | Buzzer (0 = off, 1 = on) | **Observed** |
-| 6 | Unused by any named wrapper | From disassembly |
+| 6 | Unused by any named wrapper in this direction | From disassembly |
 | 7 | Sent every 30 s unprompted; the watchdog kick | **Observed** |
 | 8 | Watchdog — the other branch of `wdg_set` | From disassembly |
 | 9 | Boolean flag | From disassembly |
-| 10 | MCU firmware version query | From disassembly |
+| 10 | MCU firmware version query | **Observed** |
 | 12 | LEDs, two data bytes | From disassembly |
 | 13 | Two data bytes taken from the upper half of the argument | From disassembly |
+
+The MCU originates its own frames, and **the command byte is scoped to the
+direction** — it is not a shared opcode space. Read the start byte first:
+
+| Command | Direction | Meaning |
+|---|---|---|
+| 1 | MCU→SoC | Key event — see [Key events](#key-events) |
+| 5 | MCU→SoC | Status broadcast at 2 Hz — see [The MCU status broadcast](#the-mcu-status-broadcast) |
+| 5 | SoC→MCU | Buzzer |
+| 6 | MCU→SoC | Firmware version reply — see [Firmware version](#firmware-version) |
 
 Commands 2 and 4 both read-modify-write a cached state word in the context
 (`+0x130` for LEDs, `+0x12c` for relays): bit 7 of the argument set means clear
@@ -291,28 +301,261 @@ never disables the watchdog.
 it lives in the AT89S52, survives anything happening on the SoC, and is kept
 satisfied purely by the vendor application writing to a serial port.
 
-> **A porting hazard.** A mainline kernel that boots without servicing this will
-> stop the kicks. If the MCU responds by resetting the SoC — which is the usual
-> reason for putting a watchdog in a companion microcontroller, and the reason
-> its watchdog is worth more than one inside the part being watched — the board
-> will reset some time after boot, looking exactly like an unexplained hang.
-> Either send `A0 07 00 00 A7` every 30 seconds, or send `A0 08 00 00 A8` once
-> to disable it.
+> **A hazard only once something arms it.** Command 7 is *arm-or-kick*. If the
+> watchdog has been armed and the kicks then stop, the MCU **hard-resets the SoC
+> about 60 seconds later** — measured, see below. But a kernel that never sends
+> command 7 has not been observed to provoke a reset, and a mainline port has
+> been run on this board without one. Do not assume you must service it; do
+> recognise the signature if you see it.
+
+#### The timeout, measured
+
+This was tested directly rather than assumed. The vendor application was frozen
+with `SIGSTOP` immediately after a kick went out — verified by watching the
+UART1 TX counter advance by exactly 10 bytes, the two frames of one kick — and
+the serial console was logged from an external host.
+
+| | |
+|---|---|
+| Last kick | t0 |
+| First U-Boot output on the console | t0 + 61 s … t0 + 67 s |
+| Timeout | **≈ 60 s**, two missed kicks |
+| Board back up and running | t0 + ~2.5 min, normally, no intervention |
+
+The bound is the console poll interval; U-Boot prints its banner a second or
+two after reset, so the underlying timeout is essentially 60 seconds.
+
+**It is a hard reset, not a hang.** The console produced a full
+`U-Boot 2010.06` banner with DRAM and NAND re-initialisation, so the MCU
+asserts SoC reset rather than merely signalling. Nothing else could have caused
+it: `/dev/watchdog` was open by no process at the time, so the SP805 was not
+armed, and `inittab` has no respawn entry for the application.
+
+#### It does not stay armed after firing
+
+The same capture rules out a reset loop. After the reset, the board took about
+150 seconds to come back — far longer than the 60-second timeout — and the
+vendor application cannot have resumed kicking until late in that boot. Yet the
+console shows **exactly one** `U-Boot 2010.06` banner and **one** `Linux
+version` line. No second reset occurred during a long unkicked stretch.
+
+So the watchdog is one-shot: it fires, resets the SoC, and disarms. Either the
+MCU clears it after firing, or the MCU shares the reset. Either way it has to be
+re-armed by a command 7 before it can fire again.
+
+That matches field experience on this board: a mainline kernel that never sends
+command 7 has been booted and run without any watchdog reset. **A port is
+probably not exposed to this at all**, and the mitigation frames are insurance
+rather than a requirement.
+
+#### What is still open
+
+Whether the armed state survives a reset the watchdog did *not* cause. If you
+boot the vendor firmware — arming the watchdog — and then reboot into your own
+kernel, does the arm carry across? The measurement above cannot answer that,
+because there the watchdog had just fired.
+
+This is the one case where a port could still be bitten, and it is exactly the
+workflow a developer would use. Testing it means rebooting from the running
+vendor system, stopping at the U-Boot prompt, and waiting two minutes to see
+whether the board resets underneath the prompt.
 
 Two things are not established: the MCU's timeout (only that it exceeds 30
 seconds), and what it actually does when the timeout expires. Testing that means
 stopping the vendor application and waiting to see whether the board resets.
 
-And the MCU's idle heartbeat, twice a second:
+### The MCU status broadcast
+
+Twice a second, unprompted, the MCU sends:
 
 ```
 read(7, "\x0a\x05\xff\xff\x0d", 5)
 ```
 
 `0x0A + 0x05 + 0xFF + 0xFF = 0x20D`, low byte `0x0D` — the same checksum rule
-with the MCU's own start byte. The `0xFF 0xFF` payload is stable while nothing
-is happening, which is what an idle key-state report would look like, though
-that has not been confirmed by pressing anything.
+with the MCU's own start byte.
+
+**This is not a heartbeat. It is a status report, and the two data bytes are
+live state.** Shorting alarm input 1 to ground changes byte 3 for exactly as
+long as the input is held:
+
+```
+1036  05:10:57.446161 read(7, "\x0a\x05\xff\xfe\x0c", 5) = 5
+1036  05:10:57.988225 read(7, "\x0a\x05\xff\xfe\x0c", 5) = 5
+...   11 frames at ~540 ms, then back to \xff\xff
+```
+
+`0x0A + 0x05 + 0xFF + 0xFE = 0x20C → 0x0C`, so the checksum tracks the change.
+
+| Byte | Field | Convention |
+|---|---|---|
+| 2 | Unknown — constant `0xFF` across every frame observed | — |
+| 3 | Alarm inputs, bit 0 = input 1 | Active low, `0xFF` = all clear |
+
+Byte 3 is active low, matching the electrical arrangement of the alarm inputs
+(see [Alarm inputs](10-rtc-watchdog-misc.md#alarm-inputs-are-dry-contact-active-low)).
+All four were shorted to ground in turn under capture:
+
+| Input | Byte 3 | Frame |
+|---|---|---|
+| 1 | `0xFE` | `0a 05 ff fe 0c` |
+| 2 | `0xFD` | `0a 05 ff fd 0b` |
+| 3 | `0xFB` | `0a 05 ff fb 09` |
+| 4 | `0xF7` | `0a 05 ff f7 05` |
+
+A plain `0x0F` mask, one bit per input, the same width as the relay mask.
+
+Byte 2 is not the key state — keys use a different frame entirely, see below.
+It held `0xFF` across every frame in both captures, including during key
+presses, so what it reports is undetermined. A second bank of inputs the board
+does not populate is a plausible guess and nothing more.
+
+Two consequences for a port.
+
+**Nothing polls the MCU.** Over a four-minute capture spanning an alarm event,
+the SoC sent nothing but the 30-second watchdog kick. `alarm_status_get` is not
+a wire transaction — it reads state the reader thread has already cached from
+this broadcast. A replacement implementation should do the same: parse `0x0A`
+frames as they arrive and keep the last known state, rather than trying to
+query.
+
+**Command 5 means different things in each direction.** SoC→MCU it is the
+buzzer; MCU→SoC it is this status frame. The command byte alone does not
+identify a message — the start byte has to be read first.
+
+The complete frame inventory from that capture, which is the whole vocabulary
+of the link at idle:
+
+| Count | Direction | Frame | Meaning |
+|---|---|---|---|
+| 423 | MCU→SoC | `0a 05 ff ff 0d` | Status, nothing asserted |
+| 11 | MCU→SoC | `0a 05 ff fe 0c` | Status, alarm input 1 asserted |
+| 17 | SoC→MCU | `a0 07 00 00 a7` | Watchdog kick |
+| 16 | MCU→SoC | `a0 07 00 00 a7` | Echo of the kick |
+
+### Key events
+
+Front-panel keys do **not** appear in the status broadcast. They are a separate
+MCU-originated frame, command 1, sent once per press:
+
+```
+05:14:29.260223  read(7, "\x0a\x01\x01\x01\x0d", 5)    front-panel "1"
+05:14:33.935878  read(7, "\x0a\x01\x04\x01\x10", 5)    front-panel "2"
+```
+
+Checksums hold: `0x0A + 0x01 + 0x01 + 0x01 = 0x0D` and
+`0x0A + 0x01 + 0x04 + 0x01 = 0x10`.
+
+| Byte | Field |
+|---|---|
+| 1 | Command 1 — key event |
+| 2 | Key code |
+| 3 | `0x00` short press, `0x01` sustained press |
+
+These are the frames behind `keyboard_realmcu_get_key_value` and `get_event`.
+
+**One frame per press, and no release event.** The MCU sent nothing when a
+button was let go, so this is an edge-triggered event rather than the level
+report the alarm inputs get. A driver should treat it as a keypress
+notification, not poll it for held state.
+
+#### Key codes
+
+All 23 front-panel buttons, pressed one at a time under capture:
+
+| Code | Button | Code | Button |
+|---|---|---|---|
+| `0x01` | `1` | `0x0D` | `REC` |
+| `0x02` | `4` | `0x0E` | `SEARCH` |
+| `0x03` | `7` | `0x0F` | `PLAY/PAUSE` |
+| `0x04` | `2` | `0x10` | `REW` |
+| `0x05` | `5` | `0x11` | `FF` |
+| `0x06` | `8` | `0x12` | `EXIT` |
+| `0x07` | `3` | `0x13` | `OK` (D-pad centre) |
+| `0x08` | `6` | `0x14` | `DOWN` |
+| `0x09` | `9` | `0x15` | `UP` |
+| `0x0A` | `MENU/+` | `0x16` | `LEFT` |
+| `0x0B` | `BACKUP/-` | `0x17` | `RIGHT` |
+| `0x0C` | `0/10+` | | |
+
+**The codes are a matrix scan position, three rows by eight columns, scanned
+column-major.** The numeric keypad proves it: labels `1 2 3` / `4 5 6` /
+`7 8 9` are laid out in rows, but the codes run `1 4 7` down the first column,
+`2 5 8` down the second, `3 6 9` down the third. Every group of three that
+follows behaves the same way, so the whole panel is one matrix:
+
+| Column | Codes | Buttons |
+|---|---|---|
+| 1 | `01`–`03` | `1` `4` `7` |
+| 2 | `04`–`06` | `2` `5` `8` |
+| 3 | `07`–`09` | `3` `6` `9` |
+| 4 | `0A`–`0C` | `MENU/+` `BACKUP/-` `0/10+` |
+| 5 | `0D`–`0F` | `REC` `SEARCH` `PLAY/PAUSE` |
+| 6 | `10`–`12` | `REW` `FF` `EXIT` |
+| 7 | `13`–`15` | `OK` `DOWN` `UP` |
+| 8 | `16`–`17` | `LEFT` `RIGHT` |
+
+So `code = (column − 1) × 3 + row`. The eighth column has only two buttons,
+which predicts an unused position at `0x18`. That code was never seen and
+nothing on the panel produces it.
+
+Byte 3 distinguishes a tap from a hold. In a capture where each button was
+tapped once, 22 of 23 events carried `0x00`; the one exception was a button
+held slightly longer. In an earlier capture where two buttons were deliberately
+held for about a second, both carried `0x01`. Same key codes, different byte 3
+across the two runs, so it is not part of the code.
+
+**There is no auto-repeat.** A button held for two seconds produced exactly one
+frame, with byte 3 set. So `0x01` is emitted once, when the press crosses a
+hold threshold — the MCU does not stream events while a key is down. The
+threshold itself is under a second, since a slightly-longer-than-normal tap was
+enough to set the bit.
+
+For a driver this means a held key is indistinguishable from a tap in duration:
+you get one event either way, and byte 3 is the only signal that the press was
+long. Anything wanting key-repeat behaviour has to synthesise it, and nothing
+reports the release.
+
+The map above was validated blind: three buttons pressed without telling the
+capture side which, decoded from the frames alone as `REC` (held), `MENU/+` and
+`BACKUP/-`, and confirmed correct including the hold flag.
+
+### Firmware version
+
+Command 10 is the one true request/response exchange in the protocol —
+everything else is either fire-and-forget with an echo, or unsolicited
+broadcast. Sending `A0 0A 00 00 AA` to `/dev/ttyAMA1` produces:
+
+```
+05:25:30.016646  read(7, "\xa0\x0a\x00\x00\xaa", 5)    echo of the query
+05:25:30.065846  read(7, "\x0a\x06\x97\x14\xbb", 5)    the reply, 49 ms later
+```
+
+So **the reply comes back as command 6**, in the MCU direction. Command 6 is
+listed above as unused, which is correct for the SoC direction and was the
+wrong conclusion to draw about the command as a whole.
+
+The two data bytes are a packed date, not a version triple.
+`keyboard_realmcu_version_get` stores the payload and unpacks it as:
+
+```
+orr  r6, r7, r6, lsl #8   ; value = d1 | (d2 << 8)
+str  r6, [r5, #0x134]
+...
+asr  r2, r3, #9  ; and #127   -> field 1, 7 bits
+asr  r1, r3, #5  ; and #15    -> field 2, 4 bits
+and  r12, r3, #31             -> field 3, 5 bits
+sprintf(out, "%02d.%02d.%02d", ...)
+```
+
+Widths of 7, 4 and 5 bits are the FAT/DOS packed-date layout — year, month,
+day. With `d1 = 0x97` and `d2 = 0x14` the value is `0x1497`, giving **10.04.23**
+— a firmware build date of 2010-04-23. The opposite byte order would yield
+"75.08.20", which is not a date, and the store instruction settles it
+independently.
+
+To read the version from your own code, send the query and wait for a `0x0A`
+frame with command 6; allow ~100 ms.
 
 ### Driving it from a port
 
@@ -365,17 +608,14 @@ The extra RX frames accompanying each TX burst are the command echoes.
 
 ## What is not yet established
 
-- **The key-event encoding.** The idle heartbeat is `0A 05 FF FF 0D` at 2 Hz.
-  What a keypress looks like has not been captured — nobody has pressed a
-  front-panel button during a trace. This is the obvious next capture, and it
-  is cheap now that the tooling is in place.
-- **Commands 6, 8, 9, 10, 12, 13.** Named in the library but never seen on the
-  wire, so their data encodings rest on static analysis alone.
-- **Alarm inputs.** `alarm_status_get` exists, but no alarm input was asserted
-  during a trace, so the poll or report frame for it is unidentified.
-- **The MCU→SoC event encoding.** The framing is shared, but how key presses and
-  alarm-input changes are encoded inside it has not been worked through.
-  `keyboard_realmcu_serial_read` is the function to read.
+- **Byte 2 of the status broadcast.** Constant `0xFF` in every frame captured,
+  including during key presses and all four alarm inputs asserted.
+- **Commands 8, 9, 12, 13.** Named in the library but never seen on the wire, so
+  their data encodings rest on static analysis alone. Command 13 and the
+  two-byte LED command 12 are unused by this board; `spot_channel` is one of 9
+  or 13 and has not been pinned down.
+- **Whether the armed watchdog survives a reset it did not cause.** See
+  [What is still open](#what-is-still-open).
 - **The MCU firmware.** It lives in the AT89S52's internal flash and is in no
   backup. Whether it can be read out depends on the part's lock bits.
 

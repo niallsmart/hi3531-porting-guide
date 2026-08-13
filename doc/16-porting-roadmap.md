@@ -44,10 +44,13 @@ The unknowns here are the GIC base within the Cortex-A9 private region
 (`0x20300000`) and the exact SPI numbering. Both come from the datasheet and
 from `arch/arm/mach-godnet/` in the SDK kernel.
 
-> **If the board resets a minute or two into an otherwise healthy boot, suspect
-> the MCU watchdog before suspecting your kernel.** The AT89S52 expects a frame
-> on `ttyAMA1` every 30 seconds and nothing disables it at boot. Writing
-> `A0 08 00 00 A8` to `/dev/ttyAMA1` at 9600 8N1 once turns it off. See
+> **If the board resets almost exactly 60 seconds into an otherwise healthy
+> boot, suspect the MCU watchdog before suspecting your kernel.** Once armed,
+> the AT89S52 expects a frame on `ttyAMA1` every 30 seconds and hard-resets the
+> SoC if they stop — measured. It is one-shot rather than a reset loop, and a
+> kernel that never arms it has been run on this board without incident, so this
+> is most likely not your problem. If it is, writing `A0 08 00 00 A8` to
+> `/dev/ttyAMA1` at 9600 8N1 once turns it off. See
 > [20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-watchdog).
 
 ## Phase 2 — Reclaim the memory
@@ -84,7 +87,7 @@ In rough order of value:
 | RTC | Low | `i2c-gpio` + `rtc-ds1307`, once pins are known |
 | SD/MMC | Medium | `dw_mmc` may fit; socket may not exist |
 | L2 cache | Medium | Forward-port the vendor `cache-hil2v200.c`; performance only, boots without it |
-| Front panel, buzzer, alarm relays | Medium | All behind the AT89S52 on `ttyAMA1`; frame format recovered, needs verifying |
+| Front panel, buzzer, alarm relays | Low–medium | All behind the AT89S52 on `ttyAMA1`. Protocol fully recovered and verified on the wire — userspace serial, no kernel driver needed |
 | Audio | High | Needs an ASoC platform driver written from scratch |
 | Video output | Very high | Proprietary VOU, no documentation |
 | Video capture | Impractical | See [11-video-input.md](11-video-input.md) |
@@ -110,12 +113,13 @@ Ranked by how much they would change the work.
    cross-reference. Not on any path a server build depends on.
 5. **The FPGA's I²C address and register map**, and what its bitstream
    implements. Only matters if the video capture path is ever revived.
-6. **The AT89S52 key-event encoding.** The protocol itself is now recovered and
-   verified on the wire, including the exact frames for the alarm relays and the
-   buzzer, so those are usable from a port today. What remains is the MCU→SoC
-   direction: the idle heartbeat is known, but no keypress or alarm-input change
-   has been captured. Tooling for this is in place — see
-   [18-reference-assets.md](18-reference-assets.md#tracing-the-vendor-application).
+6. **~~The AT89S52 protocol.~~ Resolved.** Recovered and verified on the wire in
+   both directions: the relay, buzzer and LED frames; the 2 Hz status broadcast
+   carrying the alarm inputs; and the command 1 key event with all 23 buttons
+   mapped. Enough to drive the front panel, buzzer and relays from a port
+   today. What is left is detail — whether a held key repeats, and the constant
+   byte 2 in the status broadcast. See
+   [20-front-panel-mcu.md](20-front-panel-mcu.md#key-events).
 
 ## Quick reference
 
@@ -132,6 +136,9 @@ Where the answers to the most commonly needed questions live.
 | Is the L2 cache a PL310? | No — HiSilicon L2 Cache V200, no mainline driver | [01-soc-overview.md](01-soc-overview.md#l2-cache-controller) |
 | Which timer drives the clock? | ARM SP804 at `0x20000000`, IRQ 35 — not the A9 TWD | [01-soc-overview.md](01-soc-overview.md#timers) |
 | Where does the rear RS485 go? | UART2 / `ttyAMA2` at `0x200A0000`, IRQ 42, 9600 | [05-uart-console.md](05-uart-console.md#rs485-rear-panel) |
+| How do I read the front-panel keys? | Parse `0A 01 <code> <hold>` on `ttyAMA1`; 23 codes mapped | [20-front-panel-mcu.md](20-front-panel-mcu.md#key-codes) |
+| How do I read the alarm inputs? | Don't poll — the MCU broadcasts them at 2 Hz, active low | [20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-status-broadcast) |
+| What triggers an alarm input? | A dry contact shorting it to ground; 5.2 V pull-up | [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#alarm-inputs-are-dry-contact-active-low) |
 | Where is the FPGA bitstream? | `.rodata` of `fpga_jtag.ko`, a Lattice VME file | [11-video-input.md](11-video-input.md) |
 | Which external codecs are fitted? | None — no ADV7179, TLV320AIC31 or SiI9024 | [12-video-output.md](12-video-output.md) |
 
@@ -145,7 +152,7 @@ proprietary media pipeline, and the auto-update mechanism's image format.
 | Risk | Mitigation |
 |---|---|
 | SoC watchdog resets a kernel that does not service it | U-Boot disables it; keep it disabled or add the driver early |
-| **MCU watchdog** resets the board mid-boot | The AT89S52 is kicked every 30 s by the vendor app and is **not** disabled at boot. Send `A0 07 00 00 A7` on `ttyAMA1` periodically, or `A0 08 00 00 A8` once to disable — see [20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-watchdog) |
+| **MCU watchdog** resets the board ~60 s in | Low risk: it only fires once armed, and a kernel that never sends command 7 has run without incident. If it bites, send `A0 07 00 00 A7` on `ttyAMA1` every 30 s, or `A0 08 00 00 A8` once to disable — see [20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-watchdog) |
 | U-Boot auto-update reflashes from attached media | Understand `do_auto_update` before leaving USB media attached |
 | Repartitioning destroys recorded video | Confirm with the owner first; there is no disk backup |
 | A bad flash write bricks the board | Do not write flash until a programmer is on hand; backups exist in `backups/2026-08-03/` |
