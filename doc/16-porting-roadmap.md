@@ -44,6 +44,12 @@ The unknowns here are the GIC base within the Cortex-A9 private region
 (`0x20300000`) and the exact SPI numbering. Both come from the datasheet and
 from `arch/arm/mach-godnet/` in the SDK kernel.
 
+> **If the board resets a minute or two into an otherwise healthy boot, suspect
+> the MCU watchdog before suspecting your kernel.** The AT89S52 expects a frame
+> on `ttyAMA1` every 30 seconds and nothing disables it at boot. Writing
+> `A0 08 00 00 A8` to `/dev/ttyAMA1` at 9600 8N1 once turns it off. See
+> [20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-watchdog).
+
 ## Phase 2 — Reclaim the memory
 
 Describe both DRAM banks in the device tree and drop `mem=224M`. This should
@@ -104,12 +110,12 @@ Ranked by how much they would change the work.
    cross-reference. Not on any path a server build depends on.
 5. **The FPGA's I²C address and register map**, and what its bitstream
    implements. Only matters if the video capture path is ever revived.
-6. **Verifying the AT89S52 protocol on the wire.** The frame format and the
-   command bytes are recovered from `libhi3531.so` — 5-byte binary frames, `0xA0`
-   start, additive checksum. What remains is confirming it against real traffic
-   and decoding the MCU's key-event replies. This is what stands between a
-   mainline port and the front panel, buzzer, alarm relays and alarm inputs. See
-   [20-front-panel-mcu.md](20-front-panel-mcu.md#wire-protocol).
+6. **The AT89S52 key-event encoding.** The protocol itself is now recovered and
+   verified on the wire, including the exact frames for the alarm relays and the
+   buzzer, so those are usable from a port today. What remains is the MCU→SoC
+   direction: the idle heartbeat is known, but no keypress or alarm-input change
+   has been captured. Tooling for this is in place — see
+   [18-reference-assets.md](18-reference-assets.md#tracing-the-vendor-application).
 
 ## Quick reference
 
@@ -138,7 +144,8 @@ proprietary media pipeline, and the auto-update mechanism's image format.
 
 | Risk | Mitigation |
 |---|---|
-| Watchdog resets a kernel that does not service it | U-Boot disables it; keep it disabled or add the driver early |
+| SoC watchdog resets a kernel that does not service it | U-Boot disables it; keep it disabled or add the driver early |
+| **MCU watchdog** resets the board mid-boot | The AT89S52 is kicked every 30 s by the vendor app and is **not** disabled at boot. Send `A0 07 00 00 A7` on `ttyAMA1` periodically, or `A0 08 00 00 A8` once to disable — see [20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-watchdog) |
 | U-Boot auto-update reflashes from attached media | Understand `do_auto_update` before leaving USB media attached |
 | Repartitioning destroys recorded video | Confirm with the owner first; there is no disk backup |
 | A bad flash write bricks the board | Do not write flash until a programmer is on hand; backups exist in `backups/2026-08-03/` |

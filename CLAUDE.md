@@ -34,7 +34,7 @@ You have access to these assets:
 
 # Permissions
 
-DO NOT WRITE TO SPI OR NAND STORAGE ON THE DVR.
+DO NOT WRITE TO SPI OR NAND STORAGE ON THE DVR.  DO NOT WRITE TO ANY yaffs2 FILESYSTEMS.
 
 You may reboot the DVR as necessary.
 

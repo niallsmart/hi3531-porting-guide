@@ -240,6 +240,75 @@ SP490E SP491E RS-485 Transceiver.pdf   RS485 transceiver (U34)
 SGM9119 Video Filter Driver.pdf        SD video filter driver (U17)
 ```
 
+## Building binaries for the DVR
+
+The DVR runs uClibc 0.9.32.1 with gcc 4.4.1, EABI, linuxthreads — as reported by
+`/proc/version`. The SDK's `arm-hisiv100-linux` toolchain matches that exactly.
+(`arm-hisiv100nptl-linux` is the NPTL variant and is *not* what this firmware
+was built with.)
+
+The toolchain binaries are x86-64 Linux, so on an Apple Silicon Mac they need a
+container:
+
+```sh
+tar xjf .../osdrv/toolchain/arm-hisiv100-linux/arm-hisiv100-linux.tar.bz2
+docker run --rm --platform linux/amd64 -v "$PWD:/w" -w /w debian:bullseye-slim \
+  /w/arm-hisiv100-linux/bin/arm-hisiv100-linux-uclibcgnueabi-gcc -o hello hello.c
+```
+
+A correct result reports `ELF 32-bit LSB executable, ARM, EABI5 ... interpreter
+/lib/ld-uClibc.so.0`. If the interpreter says anything else, the binary will not
+run on the DVR.
+
+Autotools projects cross-compile with
+`./configure --host=arm-hisiv100-linux-uclibcgnueabi`. `strace` 4.7 builds clean
+this way and was the tool used to recover the MCU protocol in
+[20-front-panel-mcu.md](20-front-panel-mcu.md).
+
+### Getting binaries onto the DVR
+
+> **`/tmp` is not tmpfs on this device.** `df /tmp` reports `/dev/root`, the
+> 16 MB yaffs2 rootfs on **NAND**. Writing there writes flash. Use **`/nfsdir`**,
+> which is a 107 MB tmpfs, or `/dev`, which is also tmpfs.
+
+There is no `scp` on the DVR, but busybox provides `wget`, `tftp`, `nc` and
+`base64`. Serving over HTTP from the workstation is the least friction:
+
+```sh
+python3 -m http.server 8099 --bind 0.0.0.0          # on the workstation
+# then, on the DVR:
+wget -q http://<workstation-ip>:8099/strace -O /nfsdir/strace && chmod +x /nfsdir/strace
+```
+
+Everything in `/nfsdir` vanishes on reboot, which is the desired property.
+
+### Tracing the vendor application
+
+The application is a 56-thread process. Attach to the **thread-group leader**,
+not to the `XDVRStart.hisi` launcher that also matches `td3531` in `ps`:
+
+```
+ 1028 root  ./XDVRStart.hisi ./td3531     <- launcher, single thread, traces nothing
+ 1032 root  ./td3531                      <- the real process, 56 threads, owns the fds
+```
+
+Find it by looking for the process that actually holds the device open rather
+than by name. Then:
+
+```sh
+/nfsdir/strace -p 1032 -f -tt -xx -s 64 -e trace=read,write -e read=7 -e write=7 \
+  -o /nfsdir/a.log
+```
+
+`-xx` is what makes the buffers readable as hex. Traffic on that port is sparse,
+so the overhead is negligible and the application is unaffected — but note that
+a short trace window can easily catch nothing, since the only unprompted traffic
+is a 30-second watchdog frame.
+
+There is no `strace`, `ftrace`, `kprobes` or `debugfs` on the stock device, but
+`CONFIG_MODULES=y` and the SDK ships the matching kernel source, so a loadable
+module is also possible if something needs kernel-side visibility.
+
 ## Raspberry Pi
 
 Configuration changes made to the Pi during this work are logged separately in

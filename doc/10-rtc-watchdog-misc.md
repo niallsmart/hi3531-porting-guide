@@ -34,6 +34,18 @@ to misdiagnose.
 The IP is likely an ARM SP805, which mainline supports (`wdt-sp805`), but this
 has not been confirmed against the datasheet.
 
+### There is a second watchdog
+
+The SP805 above is not the only one. The AT89S52 front-panel microcontroller
+holds its own, and unlike the SP805 **it is not disabled at boot** — the vendor
+application keeps it satisfied by sending `A0 07 00 00 A7` over `/dev/ttyAMA1`
+every 30 seconds, for as long as it runs.
+
+A mainline kernel will not do that, so the kicks stop. The consequences are
+undetermined, but a companion-MCU watchdog usually resets the SoC. See
+[20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-watchdog) for the frames
+to send, including the one that disables it.
+
 ## Real-time clock
 
 There are **two** RTCs in play.
