@@ -159,6 +159,24 @@ Bits [5:4] decode as 0 = SPI flash, 1 = DDR, 2/3 = NAND. Here
 `(0xA0001D00 >> 4) & 0x3 = 0`, so the board boots from **SPI flash**, agreeing
 with `getinfo bootmode`. See [01-soc-overview.md](01-soc-overview.md).
 
+Only the strap bits are stable. The upper bits are live status and change
+between reads — a later read of the same register returned `0xE8001D04`, with
+`[5:4]` still `0`.
+
+### Secondary CPU entry point — `SYS_CTRL + 0x134`
+
+Also beyond the block above, read from the running vendor kernel:
+
+```
+20050130: 00000000 8000eccc 00000003 00000000
+```
+
+`+0x134` is the address CPU1 jumps to when it leaves U-Boot's poll loop;
+`0x8000ECCC` is a physical address inside the loaded kernel. U-Boot zeroes this
+register on every boot. `+0x138` reads `0x00000003` and is unidentified —
+nothing in the SDK or the flash image references it. See
+[Secondary CPU startup](01-soc-overview.md#secondary-cpu-startup).
+
 ## DDR controller 0 — `0x20110000`
 
 ```

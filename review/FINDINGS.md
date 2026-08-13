@@ -15,8 +15,8 @@ than only the cited example; the "Changed" row lists them all.
 | 2 | [Device-tree interrupt numbers](02-device-tree-interrupts.md) | **Confirmed** | `0b2bdad` |
 | 3 | [SP804 timer topology](03-sp804-timer-topology.md) | **Confirmed** | `c17240e` |
 | 4 | [Device-tree handoff from U-Boot](04-device-tree-handoff.md) | **Confirmed** | `296668b` |
-| 5 | [Access to the upper DRAM bank](05-upper-dram-bank.md) | **Confirmed** | |
-| 6 | [Secondary CPU startup](06-secondary-cpu-startup.md) | Not yet investigated | |
+| 5 | [Access to the upper DRAM bank](05-upper-dram-bank.md) | **Confirmed** | `6193589` |
+| 6 | [Secondary CPU startup](06-secondary-cpu-startup.md) | **Confirmed** | |
 | 7 | [Pinmux provenance and completeness](07-pinmux-map.md) | Not yet investigated | |
 | 8 | [Scope of the register documentation](08-register-documentation.md) | Not yet investigated | |
 | 9 | [GPIO and watchdog confidence](09-gpio-watchdog.md) | Not yet investigated | |
@@ -588,3 +588,124 @@ configuration is not incidental: `VMSPLIT_2G` to reach the bank and
 | `doc/02-memory-map.md` | Summary claim qualified; new "Making both banks usable" section — the `vmalloc_limit` arithmetic and per-split table, the `Ignoring RAM` failure mode, `VMSPLIT_2G` vs `HIGHMEM`, the hole and memory model, and DMA |
 | `doc/16-porting-roadmap.md` | Phase 2 now requires `VMSPLIT_2G` and tabulates the two failure modes by what the kernel reports; quick-reference row; risks-table entry |
 | `doc/README.md` | Finding 1 notes both configuration traps |
+
+---
+
+## 6. Secondary CPU startup — **Confirmed**
+
+The roadmap did not describe how CPU1 is released, and the review's reading of
+`arch/arm/mach-godnet/platsmp.c` is accurate: it enables the SCU, writes the
+physical address of `godnet_secondary_startup` to `0x20050134`, and uses a
+holding pen. One detail in the observation needs correcting — the sequence uses
+**no GIC software interrupt**. It does not need one.
+
+### Evidence
+
+**The bootloader half of the mechanism.** `SMP_COREX_START_ADDR_REG` is
+commented `/* see bootloader */`, and the bootloader is where the interesting
+part is. `arch/arm/cpu/godnet/start.S` in the SDK U-Boot, with
+`SMP_COREX_START_ADDR_REG` = `SYS_CTRL_REG_BASE + 0x0134` and `COREX_RST_REG` =
+`CRG_REG_BASE + 0x28` from `arch/arm/include/asm/arch-godnet/platform.h`:
+
+```asm
+        /* check cpuid */
+        mrc     p15, 0, r0, c0, c0, 5
+        and     r0, r0, #0xf
+        cmp     r0, #0
+        bne     core_x_flow
+        b       main_core
+
+core_x_flow:
+        ldr     r3, =SMP_COREX_START_ADDR_REG
+        /* checking if cpu0 run to kernel, if that, we go */
+        ldr     r0, [r3]
+        cmp     r0, #0
+        beq     core_x_flow
+core_x_jump:
+        mov     pc, r0
+```
+
+`main_core` asserts bits 14–17 of `CRG + 0x28` to hold CPU1 in reset, copies
+U-Boot's early code from `0x80800000` to physical address 0 (`/* slave run code
+start position */`), clears `0x20050134`, and releases the reset. CPU1 then runs
+the copied code from address 0 and parks in `core_x_flow`.
+
+**The installed image matches the SDK source.** The same instruction sequence
+is at file offset `0x114c`–`0x1170` of
+`backups/2026-08-03/spi-nor/dhb-ax-spi-nor-cold-a.bin`, and the constant
+`0x20050134` appears exactly once in the whole 2 MB image, in the literal pool
+at `0x181c`.
+
+**Three live reads on the running board tie it together:**
+
+| Read | Value | Meaning |
+|---|---|---|
+| `0x20050134` | `0x8000ECCC` | Physical address inside the loaded kernel — what `platform_smp_prepare_cpus()` wrote |
+| `0x20030028` | `0x00000023` | Bits 14–17 clear: CPU1 reset released by U-Boot |
+| `0x0`–`0x1170` | U-Boot vectors, then `E59F36B4 E5930000 E3500000 0AFFFFFB E1A0F000` | The copied poll loop, still resident |
+| `0x20300004` | `0x00000531` | SCU: two CPUs, both in coherency |
+
+Physical address 0 is not an alias of DDR0 — `0x0` reads U-Boot's copied code
+while `0x80000000` reads kernel data — so the holding code sits outside anything
+a device tree describes as memory.
+
+**No software interrupt.** The vendor's `boot_secondary()` keeps the Realview
+comment about sending one but has no `smp_cross_call()`. Upstream Realview of
+that vintage did call it; the vendor removed it because CPU1 is spinning on a
+register rather than waiting in WFI.
+
+### Answers to the four questions
+
+**What does a current kernel need to reproduce this?** One 32-bit store. U-Boot
+has already released CPU1 and left it polling, so a mainline port never touches
+the reset register. The `smp_operations` is about thirty lines: ioremap the
+system controller, `scu_enable(scu_a9_get_base())` in `.smp_prepare_cpus`, and
+`writel_relaxed(__pa_symbol(secondary_startup), base + 0x134)` in
+`.smp_boot_secondary`.
+
+**SoC-specific `smp_operations`, a new `enable-method`, or something else?**
+SoC-specific ops. Mainline ARM32 has no generic "write the entry point to a
+register" method — `spin-table` is arm64-only. They can be bound through the
+machine descriptor's `.smp` field or through `CPU_METHOD_OF_DECLARE` with an
+`enable-method` in the `cpus` node. The closest existing template is
+`hi3xxx_smp_ops` in `arch/arm/mach-hisi/platsmp.c`, which writes
+`__pa_symbol(secondary_startup)` to `ctrl_base + ((cpu - 1) << 2)` — the same
+shape — but it is not reusable unmodified, because it also calls
+`hi3xxx_set_cpu()` to de-assert a reset and `arch_send_wakeup_ipi_mask()`,
+neither of which applies here.
+
+**CPU0 only, or both cores?** CPU0 only for the first boot, both later. This is
+now explicit in Phase 1 and Phase 5 of the roadmap. Leaving CPU1 alone is free
+and safe: U-Boot zeroed the register, so CPU1 stays in a loop that performs one
+register read, a compare and a branch, at an address outside DDR.
+
+**Which parts of the vendor sequence remain necessary?** The SCU enable and the
+register write. The holding pen, `pen_release` and `headsmp.S` all go, provided
+the register write moves from `.smp_prepare_cpus` into `.smp_boot_secondary` —
+mainline populates `secondary_data` before calling the latter, so CPU1 can enter
+`secondary_startup` directly. The pen exists only because the vendor releases
+CPU1 before the stack and page tables are ready. `.cpu_die`/`.cpu_kill` should
+be left unimplemented unless hotplug is wanted: once CPU1 leaves the poll loop
+nothing puts it back, so re-onlining needs a WFI-and-wakeup-IPI path written
+from scratch.
+
+### Also found
+
+The cores are Cortex-A9 **r3p0** (`CPU variant 0x3`, `CPU revision 0`). Two
+errata that apply to an SMP build on r3p0 are not enabled in
+`godnet_defconfig`: `ARM_ERRATA_764369` (`depends on CPU_V7 && SMP`, all
+revisions) and `ARM_ERRATA_775420` (listed for r3p0; not offered by 3.0). The
+vendor does set `ARM_ERRATA_754322`, which is correct for r3p0. `720789` and
+`751472` do not apply — both are fixed by r3p0.
+
+`SYS_CTRL + 0x138` reads `0x00000003` and is unidentified; nothing in the SDK
+or the flash image references it.
+
+### Changed
+
+| File | What |
+|---|---|
+| `doc/01-soc-overview.md` | New "Secondary CPU startup" section — the eight-step firmware sequence, the U-Boot source and live evidence, the skip-SMP case, a worked `smp_operations` and device-tree fragment, and the errata table |
+| `doc/03-boot-chain.md` | U-Boot section points at the CPU1 release path and names `arch/arm/cpu/godnet/` |
+| `doc/16-porting-roadmap.md` | Phase 1 says to boot CPU0 only and why that is safe; Phase 5 gains a "second CPU" row; quick-reference row |
+| `doc/17-register-dumps.md` | New `SYS_CTRL + 0x134` dump; note that only the strap bits of `+0x8C` are stable |

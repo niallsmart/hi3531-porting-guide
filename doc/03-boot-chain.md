@@ -24,7 +24,10 @@ Boot ROM  ->  U-Boot 2010.06 (SPI-NOR, 0x00000000)
 | Load address | `0x82000000` |
 
 The SDK ships matching source: `osdrv/uboot/u-boot-2010.06.tgz`, board files in
-`board/godnet/`, config in `include/configs/godnet.h`.
+`board/godnet/`, config in `include/configs/godnet.h`, CPU code in
+`arch/arm/cpu/godnet/`. Its reset path is what releases the second CPU and
+leaves it waiting for the kernel; see
+[Secondary CPU startup](01-soc-overview.md#secondary-cpu-startup).
 
 ### Environment
 

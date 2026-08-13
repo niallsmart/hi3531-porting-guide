@@ -67,6 +67,14 @@ project, and it looks sound.
    [03-boot-chain.md](03-boot-chain.md#getting-a-device-tree-into-a-modern-kernel).
 5. Load over TFTP from the Raspberry Pi and boot with `bootm`, writing nothing.
 
+**Boot CPU0 only to start with.** Bringing up the second core needs a small
+`smp_operations` written for this SoC, which is a distraction at this stage.
+Leaving it out is free and safe: U-Boot parks CPU1 in a loop polling one
+system-controller register, and if the kernel never writes that register CPU1
+stays there, reading and never writing. Describe one `cpu@0` in the device tree
+and add the second core in Phase 5. See
+[Secondary CPU startup](01-soc-overview.md#secondary-cpu-startup).
+
 Success criterion: kernel output on `ttyAMA0` reaching "Kernel panic - not
 syncing: VFS: Unable to mount root filesystem", which means CPU, memory,
 interrupts and console all work.
@@ -129,6 +137,7 @@ In rough order of value:
 
 | Item | Effort | Notes |
 |---|---|---|
+| **The second CPU** | Low–medium | ~30 lines of `smp_operations`: enable the SCU, write `__pa_symbol(secondary_startup)` to `SYS_CTRL + 0x134`. No reset or IPI needed — U-Boot leaves CPU1 running and polling. Also enable `ARM_ERRATA_764369` and `775420` for A9 r3p0 SMP. [Detail](01-soc-overview.md#secondary-cpu-startup) |
 | Watchdog | Low | Confirmed ARM SP805 — `arm,sp805` node and the APB clock |
 | USB | Low–medium | Standard EHCI/OHCI, needs PHY glue |
 | RTC | Low | On-chip PL031 (`arm,pl031`) is trivial but has no battery. Battery-backed external chip needs `i2c-gpio` + `rtc-ds1307`; pins are known |
@@ -184,6 +193,7 @@ Where the answers to the most commonly needed questions live.
 | How does the kernel get its DTB? | Appended to a zImage — this U-Boot has no FDT support. Keep `ARM_ATAG_DTB_COMPAT` off | [03-boot-chain.md](03-boot-chain.md#getting-a-device-tree-into-a-modern-kernel) |
 | Is the L2 cache a PL310? | No — HiSilicon L2 Cache V200, no mainline driver | [01-soc-overview.md](01-soc-overview.md#l2-cache-controller) |
 | Which timer drives the clock? | ARM SP804 at `0x20000000`, IRQ 35 — not the A9 TWD | [01-soc-overview.md](01-soc-overview.md#timers) |
+| How is CPU1 released? | U-Boot parks it polling `SYS_CTRL + 0x134`; write the entry point there. No reset register, no IPI | [01-soc-overview.md](01-soc-overview.md#secondary-cpu-startup) |
 | Is the SoC watchdog portable? | Yes — confirmed ARM SP805, use `arm,sp805` | [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#the-ip-is-an-sp805) |
 | Is there an RTC with a mainline driver? | Yes — on-chip ARM PL031, but no battery backup | [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#on-chip-rtc--an-arm-pl031) |
 | Where does the rear RS485 go? | UART2 / `ttyAMA2` at `0x200A0000`, IRQ 42, 9600 | [05-uart-console.md](05-uart-console.md#rs485-rear-panel) |

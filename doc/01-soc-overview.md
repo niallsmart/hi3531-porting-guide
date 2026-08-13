@@ -431,6 +431,206 @@ zero on CPU0. A mainline port can either keep this arrangement with `arm,sp804`,
 or enable the TWD at PPI 29 — the TWD path is untested on this hardware, and
 the A9 TWD clock scales with the CPU clock, which is why vendors often avoid it.
 
+## Secondary CPU startup
+
+Both cores run under the vendor firmware. `/proc/cpuinfo` lists `processor 0`
+and `processor 1`, and the SCU configuration register at `0x20300004` reads
+`0x00000531`: bits [1:0] = `01`, two CPUs; bits [7:4] = `0011`, both taking part
+in coherency. `SCU_CTLR` at `0x20300000` reads `1`.
+
+**U-Boot has already done the hard part by the time the kernel runs.** It takes
+CPU1 out of reset and leaves it spinning on a single system-controller word,
+ready to branch to whatever address is written there. A kernel starts the
+second core with one 32-bit store. It never touches the reset register.
+
+### How the vendor firmware does it
+
+| Step | Who | What |
+|---|---|---|
+| 1 | CPU0, U-Boot | Asserts CPU1 reset — bits 14–17 of `CRG + 0x28` (`0x20030028`) |
+| 2 | CPU0, U-Boot | Copies its own early code from `0x80800000` to **physical address 0**, so CPU1 has something to run |
+| 3 | CPU0, U-Boot | Clears `SYS_CTRL + 0x134` (`0x20050134`) |
+| 4 | CPU0, U-Boot | Releases CPU1 reset, then boots the kernel normally |
+| 5 | CPU1 | Starts at address 0, reads `MPIDR`, takes the non-zero-core branch, polls `0x20050134` |
+| 6 | CPU0, kernel | `platform_smp_prepare_cpus()` enables the SCU and writes `virt_to_phys(godnet_secondary_startup)` to `0x20050134` |
+| 7 | CPU1 | Sees the non-zero value, branches to it, lands in the kernel's holding pen |
+| 8 | CPU0, kernel | `boot_secondary()` sets `pen_release = 1`; CPU1 leaves the pen for `secondary_startup` |
+
+Steps 1–5 are `arch/arm/cpu/godnet/start.S` in the SDK U-Boot:
+
+```asm
+        /* check cpuid */
+        mrc     p15, 0, r0, c0, c0, 5
+        and     r0, r0, #0xf
+        cmp     r0, #0
+        bne     core_x_flow
+        b       main_core
+
+core_x_flow:
+        ldr     r3, =SMP_COREX_START_ADDR_REG
+        /* checking if cpu0 run to kernel, if that, we go */
+        ldr     r0, [r3]
+        cmp     r0, #0
+        beq     core_x_flow
+        /* we got the address, let's go */
+core_x_jump:
+        mov     pc, r0
+```
+
+with `SMP_COREX_START_ADDR_REG` = `SYS_CTRL_REG_BASE + 0x0134` and
+`COREX_RST_REG` = `CRG_REG_BASE + 0x28` in
+`arch/arm/include/asm/arch-godnet/platform.h`. The kernel side is
+`arch/arm/mach-godnet/{platsmp.c,platsmp.h,headsmp.S}`, whose copy of the
+constant is commented `/* see bootloader */`.
+
+The installed U-Boot matches the SDK source here: the same instruction sequence
+appears at file offset `0x114c`–`0x1170` of
+`backups/2026-08-03/spi-nor/dhb-ax-spi-nor-cold-a.bin`, and `0x20050134` occurs
+nowhere else in the image.
+
+Three live reads on the running device confirm the whole chain:
+
+| Read | Value | Meaning |
+|---|---|---|
+| `0x20050134` | `0x8000ECCC` | A physical address inside the loaded kernel — what CPU0 wrote at step 6 |
+| `0x20030028` | `0x00000023` | Bits 14–17 clear: CPU1 reset released |
+| `0x0` … `0x1170` | U-Boot's vectors, then `E59F36B4 E5930000 E3500000 0AFFFFFB E1A0F000` | The copied poll loop, still resident |
+
+Physical address 0 is **not** an alias of DDR0. `0x0` reads U-Boot's copied
+code while `0x80000000` reads kernel data, so the region U-Boot scribbles on at
+step 2 lies outside anything a device tree would describe as memory. A kernel
+cannot accidentally overwrite CPU1's holding code.
+
+**No IPI is involved.** The vendor's `boot_secondary()` carries the stock
+Realview comment about sending a soft interrupt but has no `smp_cross_call()`
+call; it only sets `pen_release` and waits. It does not need one, because CPU1
+is already spinning rather than sitting in WFI.
+
+### If you skip SMP
+
+CPU1 is harmless if a mainline kernel never writes `0x20050134`: U-Boot cleared
+it at boot, so CPU1 stays in the poll loop at physical address 0. The loop only
+reads — one register load, a compare and a branch — and that address is outside
+DDR, so it cannot disturb the kernel. A uniprocessor first boot costs nothing
+but a core spinning.
+
+One caveat: the register is *not* cleared by a warm restart that skips U-Boot.
+Reset through U-Boot (`reset`, or power cycling) before loading a test kernel.
+
+### What a mainline kernel needs
+
+Mainline ARM32 has no generic "write the entry point to a register" enable
+method — `spin-table` is arm64-only. Hi3531 needs a `struct smp_operations`,
+bound either through the machine descriptor's `.smp` field or through
+`CPU_METHOD_OF_DECLARE` plus an `enable-method` in the `cpus` node. It is
+around thirty lines:
+
+```c
+#define HI3531_SYSCTRL_CPU1_JUMP        0x134
+
+static void __iomem *sysctrl_base;
+
+static void __init hi3531_smp_prepare_cpus(unsigned int max_cpus)
+{
+        struct device_node *np;
+
+        np = of_find_compatible_node(NULL, NULL, "hisilicon,hi3531-sysctrl");
+        sysctrl_base = of_iomap(np, 0);
+
+        scu_enable(scu_a9_get_base());
+}
+
+static int hi3531_boot_secondary(unsigned int cpu, struct task_struct *idle)
+{
+        if (!sysctrl_base)
+                return -ENODEV;
+
+        writel_relaxed(__pa_symbol(secondary_startup),
+                       sysctrl_base + HI3531_SYSCTRL_CPU1_JUMP);
+        return 0;
+}
+
+static const struct smp_operations hi3531_smp_ops __initconst = {
+        .smp_prepare_cpus       = hi3531_smp_prepare_cpus,
+        .smp_boot_secondary     = hi3531_boot_secondary,
+};
+CPU_METHOD_OF_DECLARE(hi3531_smp, "hisilicon,hi3531-smp", &hi3531_smp_ops);
+```
+
+Three differences from the vendor code matter:
+
+- **Write the address in `.smp_boot_secondary`, not in `.smp_prepare_cpus`.**
+  Mainline fills in `secondary_data` before calling `smp_boot_secondary()`, so
+  by then CPU1 can go straight into `secondary_startup`. The vendor writes it
+  early, which releases CPU1 before the stack and page tables exist — which is
+  exactly why the vendor needs the holding pen.
+- **Drop `pen_release` and `headsmp.S`.** With the write moved, mainline's own
+  `secondary_startup` handles the handshake.
+- **Leave `.cpu_die` and `.cpu_kill` unimplemented** unless CPU hotplug is
+  actually wanted. Once CPU1 has left the poll loop there is nothing to put it
+  back, so re-onlining would need a WFI-and-wakeup-IPI path written from
+  scratch. Without those ops, `CONFIG_HOTPLUG_CPU` simply refuses to offline it.
+
+`scu_a9_get_base()` reads PERIPHBASE from CP15, so the SCU node is optional for
+the code above; declare it anyway for completeness. `.smp_init_cpus` is not
+needed — `arm_dt_init_cpu_maps()` populates the possible map from the `cpus`
+node.
+
+The closest mainline template is `hi3xxx_smp_ops` in
+`arch/arm/mach-hisi/platsmp.c`, which writes `__pa_symbol(secondary_startup)`
+to `ctrl_base + ((cpu - 1) << 2)` — the same shape as this single register. **It
+is not reusable as-is**: it also calls `hi3xxx_set_cpu()` to de-assert the
+core's reset and then `arch_send_wakeup_ipi_mask()`. Hi3531 needs neither, and
+those writes would land on unrelated registers.
+
+The device-tree side:
+
+```dts
+cpus {
+    #address-cells = <1>;
+    #size-cells = <0>;
+    enable-method = "hisilicon,hi3531-smp";
+
+    cpu@0 {
+        device_type = "cpu";
+        compatible = "arm,cortex-a9";
+        reg = <0>;
+    };
+    cpu@1 {
+        device_type = "cpu";
+        compatible = "arm,cortex-a9";
+        reg = <1>;
+    };
+};
+
+scu@20300000 {
+    compatible = "arm,cortex-a9-scu";
+    reg = <0x20300000 0x100>;
+};
+
+sysctrl: system-controller@20050000 {
+    compatible = "hisilicon,hi3531-sysctrl", "syscon";
+    reg = <0x20050000 0x1000>;
+};
+```
+
+### Errata
+
+The cores report `CPU variant 0x3` / `CPU revision 0` — Cortex-A9 **r3p0**. For
+that revision in an SMP build:
+
+| Erratum | Applies | Vendor sets it |
+|---|---|---|
+| `ARM_ERRATA_764369` — cache line maintenance by MVA may not succeed | Yes — all revisions, `depends on CPU_V7 && SMP` | No |
+| `ARM_ERRATA_775420` — aborting cache maintenance may deadlock | Yes — listed for r3p0 | Not offered by 3.0 |
+| `ARM_ERRATA_754322` — faulty MMU translations after an ASID switch | Yes — r2p\*, r3p\* | Yes |
+| `ARM_ERRATA_720789` — TLBIASIDIS may broadcast a faulty ASID | No — fixed before r2p0 | No |
+| `ARM_ERRATA_751472` — interrupted ICIALLUIS | No — fixed in r3p0 | No |
+
+`764369` is the one to watch: it is SMP-only, the vendor kernel does not enable
+it, and nothing in the vendor's single-core-affine interrupt setup would have
+exposed it.
+
 ## Clocks
 
 Clock and reset control lives in the CRG block at `0x20030000`. The vendor
