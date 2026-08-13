@@ -5,8 +5,8 @@ list of what this documentation does not establish.
 
 ## Recommended strategy
 
-**Boot a modern kernel from the SATA disk using the existing vendor U-Boot,
-leaving both flash devices untouched.**
+**Load a modern kernel over TFTP with the existing vendor U-Boot and put the
+root filesystem on the SATA disk, leaving both flash devices untouched.**
 
 This is the lowest-risk, highest-value path:
 
@@ -17,6 +17,29 @@ This is the lowest-risk, highest-value path:
 | Avoids the two unportable flash controllers | See [04-flash-storage.md](04-flash-storage.md) |
 | DDR init already done | The hardest bring-up problem is solved by the existing bootloader |
 | TFTP available for iteration | Test kernels never touch persistent storage |
+
+> **The kernel cannot be loaded from the SATA disk.** The installed U-Boot has
+> no `sata`, `scsi` or `ide` command, and `ext2load`/`fatload` can only address
+> `usb`. SATA is reachable only after Linux brings up `ahci_platform`, so it
+> serves as the root filesystem, never as the boot medium. See
+> [07-sata-storage.md](07-sata-storage.md#u-boot-cannot-read-the-sata-disk).
+
+### The standalone-boot gap
+
+This plan depends on the Raspberry Pi being present at every boot, which is
+fine for bring-up and awkward for a finished server. There is currently **no
+way to boot this board unattended without either writing flash or leaving USB
+media attached**:
+
+| Route | Status |
+|---|---|
+| TFTP | Works today; needs the Pi reachable at boot |
+| USB stick (`usbboot`, `fatload usb`) | Works, but see the `do_auto_update` risk below before leaving media attached |
+| SATA | Not possible from this bootloader |
+| Writing a kernel to NAND or SPI-NOR | Forbidden under the current constraint; needs a programmer on hand first |
+
+Closing this gap is a decision for later in the port, not a blocker for any of
+the phases below.
 
 The two subsystems that matter for a server — Ethernet and SATA — are both
 standard licensed IP with mature mainline drivers. That is the core bet of this

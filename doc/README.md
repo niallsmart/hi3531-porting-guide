@@ -29,9 +29,11 @@ CPU, memory and UART are equally conventional.
    HiSilicon's MMZ allocator takes the machine from 224 MB to roughly 1 GB.
    This is the single biggest win available.
 2. **Neither flash controller has a mainline driver**, but this does not block
-   anything — booting a modern kernel from the SATA disk using the existing
-   vendor U-Boot sidesteps both, satisfies the no-flash-writes constraint, and
-   leaves the original firmware intact as a fallback.
+   anything — loading a modern kernel over TFTP with the existing vendor U-Boot
+   and putting the root filesystem on the SATA disk sidesteps both, satisfies
+   the no-flash-writes constraint, and leaves the original firmware intact as a
+   fallback. The kernel cannot be loaded from SATA itself: this U-Boot has no
+   `sata` command.
 3. **The media hardware is a genuine dead end** — proprietary binary modules, no
    public register documentation, a 6.6 MB firmware blob, and a custom FPGA
    bitstream. For a server this costs nothing, since none of it is needed.

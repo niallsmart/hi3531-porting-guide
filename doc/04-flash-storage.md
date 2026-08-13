@@ -127,13 +127,17 @@ blockers for a modern kernel (the other being the media pipeline).
 
 Options, roughly in order of effort:
 
-1. **Boot from SATA instead.** The vendor U-Boot can already `ext2load` and
-   `fatload`. Keep the vendor bootloader in SPI-NOR, keep the vendor kernel
-   partition untouched, and put the modern kernel and root filesystem on the
-   1 TB disk. This sidesteps both flash controllers entirely and is the
-   fastest route to a working server. **Recommended.**
-2. **Boot over TFTP/NFS.** Same idea, no local storage at all. Best during
-   bring-up.
+1. **Load the kernel over TFTP, root filesystem on SATA.** Keep the vendor
+   bootloader in SPI-NOR and the vendor kernel partition untouched, and put the
+   root filesystem on the 1 TB disk. This sidesteps both flash controllers
+   entirely and is the fastest route to a working server. **Recommended.**
+
+   Note the kernel itself cannot come from the SATA disk — the installed U-Boot
+   has no `sata`, `scsi` or `ide` command, and `ext2load`/`fatload` can only
+   address `usb`. See
+   [07-sata-storage.md](07-sata-storage.md#u-boot-cannot-read-the-sata-disk).
+2. **Boot over TFTP/NFS entirely.** Same idea, no local storage at all. Best
+   during bring-up.
 3. **Port the NAND driver.** The SDK ships source under
    `osdrv/kernel/linux-3.0.y/drivers/mtd/nand/` — a HiSilicon `hinand` driver
    that would need forward-porting across ~15 years of MTD API change. Only

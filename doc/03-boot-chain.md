@@ -100,7 +100,9 @@ stopvo tftp usb usbboot version
 - `tftp`, `ping`, `bootp` — network boot is available. Essential for iterating
   on a new kernel without writing flash.
 - `nand`, `sf` — NAND and SPI flash subsystems.
-- `usb`, `usbboot`, `fatload`, `ext2load` — boot from USB or disk.
+- `usb`, `usbboot`, `fatload`, `ext2load` — boot from USB storage. `usb` is the
+  only block interface registered in this build, so these cannot reach the SATA
+  disk; see [07-sata-storage.md](07-sata-storage.md#u-boot-cannot-read-the-sata-disk).
 - `mii` — PHY register access. Note `mii device` reports no devices until the
   network is initialised.
 - `getinfo` — takes one of four arguments (from `common/cmd_getinfo.c` in the

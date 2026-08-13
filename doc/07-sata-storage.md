@@ -126,13 +126,39 @@ Two things to check:
 ## Why this matters for the port
 
 `PLAN.md` forbids writing to SPI or NAND, and neither flash controller has a
-mainline driver. Booting from SATA resolves both problems at once:
+mainline driver. Putting the root filesystem on SATA resolves both problems:
 
 - Keep the vendor U-Boot in SPI-NOR untouched.
 - Keep the vendor kernel in NAND untouched, so the DVR firmware remains
   bootable as a fallback.
-- Put the modern kernel and root filesystem on the disk, and load it with
-  U-Boot's existing `ext2load` or `fatload`.
+- Put the root filesystem on the disk, and load the kernel over TFTP.
 
 This gives a reversible, low-risk path to a working general-purpose system.
 See [16-porting-roadmap.md](16-porting-roadmap.md).
+
+## U-Boot cannot read the SATA disk
+
+The disk is not reachable until Linux has initialised `ahci_platform`. **The
+kernel therefore cannot live on it** — it arrives over TFTP or from USB, and
+SATA carries the root filesystem only.
+
+Four independent checks agree:
+
+| Check | Result |
+|---|---|
+| `help` at the U-Boot prompt | No `sata`, `scsi` or `ide` command |
+| `include/configs/godnet.h` | No `CONFIG_CMD_SATA`, `CONFIG_CMD_SCSI` or `CONFIG_CMD_IDE`; no occurrence of "sata", "scsi", "ide" or "ahci" at all |
+| `disk/part.c` | `block_drvr[]` registers an interface name only when its command is enabled. `usb` is the only one that survives — `CONFIG_MMC` exists but is inside `#ifdef CONFIG_AUTO_SD_UPDATE`, and the shipped build has no `mmc` command |
+| The `SATA` string in the flash image | Part of `if_typename[]` in `disk/part.c`, a static label table compiled in unconditionally. Not evidence of support |
+
+So `ext2load` and `fatload` can address exactly one interface, `usb`.
+`ext2load sata …` fails inside `get_dev()`.
+
+**Rebuilding U-Boot would not be enough either.** This tree's
+`drivers/block/ahci.c` is PCI-only — `ahci_init_one(pci_dev_t pdev)`, reached
+through `pci_find_devices` — while the Hi3531's AHCI is a memory-mapped
+platform device. U-Boot 2010.06 predates the `CONFIG_SCSI_AHCI_PLAT` platform
+path that later releases use for exactly this case. The other SATA drivers in
+the tree (`fsl_sata`, `sata_dwc`, `sata_sil3114`) are for other vendors'
+controllers. Enabling SATA in the bootloader means writing a platform AHCI
+driver, not flipping a config switch.
