@@ -788,9 +788,11 @@ register, so these registers show RGMII1 is wired out but say nothing about
 RGMII0.
 
 **A live Linux capture was taken to go with the U-Boot one.** All 151 registers
-read with `devmem` on the running vendor kernel. **68 registers differ from the
-U-Boot dump**, so the old document was describing the bootloader's state as if
-it were the operating configuration.
+read with `devmem` on the running vendor kernel. **44 of the 128 registers the
+U-Boot dump covers hold a different value**, plus five more above the end of
+that dump (`0x240`–`0x250`, the USB power-enable and HDMI pins) which Linux sets
+to 1 and whose reset value is 0. So the old document was describing the
+bootloader's state as if it were the operating configuration.
 
 ### Answers to the four questions
 
@@ -831,7 +833,7 @@ above, which is where both duplicates came from.
 | File | What |
 |---|---|
 | `doc/19-pinmux-map.md` | Rebuilt from the datasheet: all 151 registers with pin names and field widths, a "what this board selects" table comparing U-Boot against the running kernel, and a corrected peripheral summary. Provenance section now warns against the script comments |
-| `doc/17-register-dumps.md` | RGMII identified; `+0x1B0` and `+0x1F8`–`+0x1FC` added; the video-output conclusion corrected; note that the dump is U-Boot's state and 68 registers differ under Linux |
+| `doc/17-register-dumps.md` | RGMII identified; `+0x1B0` and `+0x1F8`–`+0x1FC` added; the video-output conclusion corrected; note that the dump is U-Boot's state and 44 of its registers differ under Linux |
 | `doc/09-gpio-pinmux-i2c.md` | Speculative range table and "you need the datasheet chapter" paragraph replaced with a pointer to `doc/19` |
 | `doc/06-ethernet.md` | RGMII1 pinmux corroboration, with the limit on what it proves about RGMII0 |
 | `doc/07-sata-storage.md` | The two SATA LED pins |

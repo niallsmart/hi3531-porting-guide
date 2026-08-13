@@ -7,12 +7,16 @@ setup.
 
 ## How these were taken
 
-All dumps were made from the **U-Boot prompt** using `md` (memory display),
-which is read-only and safe.
+Two read-only methods, and it matters which one a dump came from — the values
+differ.
 
-```
-hisilicon # md <address> <word_count>
-```
+| Method | Where | Command |
+|---|---|---|
+| `md` | U-Boot prompt, before Linux runs | `hisilicon # md <address> <word_count>` |
+| `devmem` | Running vendor kernel, over telnet | `devmem <address>` |
+
+Each dump below says which it is. The blocks in this document are U-Boot
+captures unless stated otherwise.
 
 > **Do not use the Linux-side `himm` tool for this.** `himm` reads a register
 > and then prompts `NewValue:` for a write. It is an interactive read-modify
@@ -91,8 +95,9 @@ The GPIO-mode block at `+0x138`–`+0x1A8` is what makes the bit-banged I²C wor
 `0x200f0198` and `0x200f019c` — SDA and SCL — are left as GPIO rather than
 routed to the hardware I²C controller, in U-Boot and afterwards.
 
-**This dump is U-Boot's state, not the operating configuration.** Sixty-eight
-registers differ under the running kernel. The largest change is the 19-pin bus
+**This dump is U-Boot's state, not the operating configuration.** Forty-four
+of the 128 registers dumped here hold a different value under the running
+kernel. The largest change is the 19-pin bus
 at `+0x0EC`–`+0x134`: the pinctrl script rewrites it from 3 to 0, turning it
 from the `VOU1120` output bus into the `VIU3` input bus, so all four video-input
 channels are active. SPI, UART1, UART2, the audio SIO ports and the HDMI pins
