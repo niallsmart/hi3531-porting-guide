@@ -49,10 +49,12 @@ project, and it looks sound.
 
 1. Set up cross-compilation for ARMv7 (`arm-linux-gnueabihf`).
 2. Write a minimal device tree: CPU, GIC, timers, memory, PL011 UART0.
-   Bases and IRQs are in [01-soc-overview.md](01-soc-overview.md). Use
-   `arm,sp804` at `0x20000000`/`0x20010000` on IRQ 35 for timekeeping — that is
-   the path the vendor kernel uses; the Cortex-A9 TWD is present but untested
-   here. Leave the L2
+   Bases and IRQs are in [01-soc-overview.md](01-soc-overview.md). For
+   timekeeping use one `arm,sp804` node at `0x20000000` on SPI 3 — its two
+   internal timers give you the clockevent and the clocksource, which is the
+   path the vendor kernel uses. The second SP804 at `0x20010000` is unused, and
+   the Cortex-A9 TWD is present but untested here. See
+   [Timers](01-soc-overview.md#timers) for the node. Leave the L2
    cache out — it is a HiSilicon block with no mainline driver, and the kernel
    boots without it. See
    [the L2 section](01-soc-overview.md#l2-cache-controller).

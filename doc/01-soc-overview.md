@@ -37,7 +37,7 @@ third-party IP with existing mainline drivers:
 |---|---|---|
 | UART | ARM PL011 | `amba-pl011` |
 | Interrupt controller | ARM GIC (Cortex-A9) | `irq-gic` |
-| System timers | ARM SP804 (part `0x804`, designer ARM) at `0x20000000`, `0x20010000` | `arm,sp804` |
+| System timers | Two ARM SP804 (part `0x804`, designer ARM) at `0x20000000` and `0x20010000`; only the first is used | `arm,sp804` |
 | SMP | Cortex-A9 MPCore SCU at `0x20300000` | `arm,cortex-a9-scu` |
 | Ethernet | Synopsys DesignWare MAC 1000 (ID 0x36) | `stmmac` |
 | SATA | AHCI 1.2 | `ahci_platform` |
@@ -53,7 +53,7 @@ rather than inferred from the IP pairing. The evidence:
 |---|---|---|
 | UART | AMBA peripheral ID at `0x20080FE0` = `0x11`, `0x10`, `0x24`, `0x00` → part `0x011`, designer `0x41` (ARM), rev 2 | `CONFIG_SERIAL_AMBA_PL011=y`; dmesg `ttyAMA0 at MMIO 0x20080000 (irq = 40) is a PL011 rev2` |
 | GIC | Distributor at `0x20301000`, CPU interface at `0x20300100` — the standard Cortex-A9 PERIPHBASE layout, see [the private peripheral region](#the-cortex-a9-private-peripheral-region) | `gic_init()` in `mach-godnet/core.c`; `/proc/interrupts` shows `GIC` for every line |
-| Timers | Peripheral ID at `0x20000FE0` → part `0x804` (SP804), designer ARM | `CONFIG_LOCAL_TIMERS` **not** set; SP804 register use in `core.c` |
+| Timers | Peripheral ID at `0x20000FE0` **and** `0x20010FE0` → part `0x804` (SP804), designer ARM, rev 1 | `CONFIG_LOCAL_TIMERS` **not** set; all SP804 register use in `core.c` is through `CFG_TIMER_VABASE`, the first block |
 | Watchdog | Peripheral ID at `0x20040FE0` = `0x05`, `0x18`, `0x14`, `0x00` → part `0x805` (SP805), designer `0x41` (ARM), rev 1 | Vendor `wdt.ko`; U-Boot closes it before boot |
 | On-chip RTC | Peripheral ID at `0x20060FE0` = `0x31`, `0x10`, `0x04`, `0x00` → part `0x031` (PL031), designer `0x41` (ARM), rev 0 | None — the vendor system does not use it |
 | IR receiver | Peripheral ID at `0x20070FE0` reads all zeros — **not a PrimeCell**, no ARM identity | Vendor `hi_ir.ko`, banner `HISI_IRDA-MF` |
@@ -175,8 +175,8 @@ writing a device tree.
 | `0x100A0000` | 0x10000 | USB 2.0 OHCI |
 | `0x100B0000` | 0x10000 | USB 2.0 EHCI |
 | `0x101C0000` | 0x20000 | Ethernet (two DWMAC1000 instances) |
-| `0x20000000` | 0x1000 | Timer 0 — ARM SP804 dual timer |
-| `0x20010000` | 0x1000 | Timer 1 — ARM SP804 dual timer |
+| `0x20000000` | 0x1000 | ARM SP804 dual timer — the one the vendor kernel uses |
+| `0x20010000` | 0x1000 | ARM SP804 dual timer — present, unused |
 | `0x20030000` | 0x100 | CRG — clock and reset generator |
 | `0x20040000` | 0x1000 | Watchdog — ARM SP805 |
 | `0x20050000` | — | System controller (SYS_CTRL) |
@@ -352,26 +352,78 @@ interface enabled with Linux's usual priority mask.
 
 ## Timers
 
-Timekeeping is done by two **ARM SP804** dual-timer blocks, not by the Cortex-A9
-private timer. `CONFIG_LOCAL_TIMERS` is *not* set in `godnet_defconfig`, so the
-TWD is left idle even though the hardware has it.
+Timekeeping is done by an **ARM SP804** dual timer, not by the Cortex-A9 private
+timer. `CONFIG_LOCAL_TIMERS` is *not* set in `godnet_defconfig`, so the TWD is
+left idle even though the hardware has it.
+
+**There are two SP804 blocks, and the vendor kernel uses only the first.** Both
+of its internal timers are in play, at their two register windows inside the one
+1 KB block:
 
 | Property | Value |
 |---|---|
-| Timer 0 (clockevent) | `0x20000000` |
-| Timer 1 (clocksource / `sched_clock`) | `0x20010000` |
-| IRQ | 35 (SPI 3), `TIMER01_IRQ`, shared by both halves |
-| Clock | 155 MHz (310 MHz bus ÷ 2 fixed prescale) |
+| Block base | `0x20000000` |
+| Timer 1 → clockevent | offsets `0x00`–`0x18` within that block |
+| Timer 2 → clocksource and `sched_clock` | offsets `0x20`–`0x38` within that block |
+| IRQ | 35 (SPI 3), `TIMER01_IRQ`, one line for both timers |
+| Clock | 155 MHz (310 MHz bus ÷ 2) |
 
-Identification is from the AMBA peripheral ID registers at `0x20000FE0`, read
-live: `0x04`, `0x18`, `0x14`, `0x00` → part number `0x804`, designer `0x41`
-(ARM), revision 1. That is an SP804, which mainline drives with `arm,sp804`
-(`drivers/clocksource/timer-sp804.c`).
+`CFG_TIMER_VABASE` is `IO_ADDRESS(TIMER0_BASE)` and every timer access in
+`mach-godnet/core.c` goes through it: the clockevent at `REG_TIMER_*`, the
+clocksource and `sched_clock` at `REG_TIMER1_*`, which `platform.h` defines as
+`0x020`–`0x038`. `CFG_TIMER2_VABASE` — the second block — is defined and never
+referenced.
 
-The control register at `0x20000008` reads `0xE2` on the running device —
-enable (bit 7), periodic (bit 6), interrupt enable (bit 5), 32-bit (bit 1) —
-matching the standard SP804 `TimerXControl` layout. Timer 0's load value is
-`0x0017A6B0` (1,550,000), which at HZ=100 gives the 155 MHz figure.
+Identification is from the AMBA peripheral ID registers, read live. Both blocks
+return `0x04`, `0x18`, `0x14`, `0x00` → part number `0x804`, designer `0x41`
+(ARM), revision 1, with the PrimeCell signature `0D F0 05 B1` following. That is
+an SP804, which mainline drives with `arm,sp804`
+(`drivers/clocksource/timer-sp804.c`). `0x20020000` bus-errors, so there is no
+third block.
+
+The control registers confirm which one is running. On the live device
+`0x20000008` and `0x20000028` both read `0xE2` — enable (bit 7), periodic
+(bit 6), interrupt enable (bit 5), 32-bit (bit 1) — while `0x20010008` and
+`0x20010028` read `0x20`, interrupt enable alone with the timer disabled, and
+both of that block's value registers sit at the `0xFFFFFFFF` reset state. Timer
+1's load value is `0x0017A6B0` (1,550,000), which at HZ=100 gives the 155 MHz
+figure.
+
+Note that the ÷2 is external to the block: the SP804's own prescale field
+(control bits 3:2) is zero, so 155 MHz is the frequency arriving at the timer
+and the rate a `clocks` property has to advertise.
+
+### The second SP804
+
+`0x20010000` is a complete second SP804 with its own GIC line —
+`TIMER23_IRQ`, Linux IRQ 36, DT SPI 4 — which the vendor kernel never requests;
+IRQ 36 does not appear in `/proc/interrupts`. A port gets it as two spare
+32-bit timers if it ever wants them, and can ignore it otherwise.
+
+### Device tree
+
+One node covers the working block. The mainline driver takes a single interrupt
+per node and, with `arm,sp804-has-irq` absent, makes timer 1 the clockevent and
+timer 2 the clocksource plus `sched_clock` — the same split the vendor kernel
+uses:
+
+```dts
+timer0: timer@20000000 {
+    compatible = "arm,sp804", "arm,primecell";
+    reg = <0x20000000 0x1000>;
+    interrupts = <0 3 4>;           /* SPI 3, level-high — vendor IRQ 35 */
+    clocks = <&timclk>, <&timclk>, <&apb_clk>;
+    clock-names = "timer1", "timer2", "apb_pclk";
+};
+```
+
+`timclk` is the 155 MHz timer clock. The driver resolves clocks by index, not by
+name — `of_clk_get(np, 0)` for timer 1, and `of_clk_get(np, 1)` for timer 2 only
+when the node declares three — so a single `clocks` entry feeding both timers is
+also valid. The names are carried because the binding asks for them.
+
+The second block, if you want it, is the same node at `0x20010000` with
+`interrupts = <0 4 4>`.
 
 Because there is no per-CPU local timer, CPU1 receives its ticks by IPI: on the
 running device `IPI0 Timer broadcast interrupts` has ~2.58 M counts on CPU1 and

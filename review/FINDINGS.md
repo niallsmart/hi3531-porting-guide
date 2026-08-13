@@ -13,7 +13,7 @@ than only the cited example; the "Changed" row lists them all.
 |---|---|---|---|
 | 1 | [U-Boot SATA loading](01-uboot-sata-loading.md) | **Confirmed** | `5835778` |
 | 2 | [Device-tree interrupt numbers](02-device-tree-interrupts.md) | **Confirmed** | `0b2bdad` |
-| 3 | [SP804 timer topology](03-sp804-timer-topology.md) | Not yet investigated | |
+| 3 | [SP804 timer topology](03-sp804-timer-topology.md) | **Confirmed** | |
 | 4 | [Device-tree handoff from U-Boot](04-device-tree-handoff.md) | Not yet investigated | |
 | 5 | [Access to the upper DRAM bank](05-upper-dram-bank.md) | Not yet investigated | |
 | 6 | [Secondary CPU startup](06-secondary-cpu-startup.md) | Not yet investigated | |
@@ -328,3 +328,92 @@ agree. A minimal boot remains the final confirmation, as Phase 1 of
 | `doc/05-uart-console.md`, `doc/06-ethernet.md`, `doc/07-sata-storage.md`, `doc/08-usb.md` | SPI values corrected in all five nodes; the "verify SPI numbering" comments replaced with the settled value and its vendor-IRQ cross-reference |
 | `doc/01-soc-overview.md` | Warning that the second cell is the SPI index, not the Linux IRQ; the ICFGR/TYPER/IIDR evidence for level-high throughout |
 | `doc/16-porting-roadmap.md` | Trigger type no longer listed as an open per-peripheral check |
+
+---
+
+## 3. SP804 timer topology — **Confirmed**
+
+The reviewer's reading of the SDK is correct in every particular. The vendor
+kernel uses **both internal timers of the single block at `0x20000000`**, and
+`doc/01` had them as one timer in each of two blocks.
+
+### What the SDK actually does
+
+`arch/arm/mach-godnet/include/mach/time.h`:
+
+```c
+#define CFG_TIMER_VABASE        IO_ADDRESS(TIMER0_BASE)   /* 0x20000000 */
+#define CFG_TIMER2_VABASE       IO_ADDRESS(TIMER1_BASE)   /* 0x20010000 */
+```
+
+Every timer access in `core.c` goes through `CFG_TIMER_VABASE`. The clockevent
+uses `REG_TIMER_*` (`core.c:182`–`210`), and the clocksource and `sched_clock`
+use `REG_TIMER1_*` (`core.c:146`, `158`, `258`, `280`–`283`) — which
+`platform.h:112`–`118` defines as offsets `0x020`–`0x038`, the *second timer of
+the same block*, not a second block. `CFG_TIMER2_VABASE` appears nowhere else in
+the tree.
+
+Both handlers are installed on the one line, `core.c:301`–`302`:
+
+```c
+setup_irq(TIMER01_IRQ, &godnet_timer_irq);
+setup_irq(TIMER01_IRQ, &godnet_freetimer_irq);
+```
+
+Each checks its own raw-interrupt-status register — `REG_TIMER_RIS` at
+`core.c:228`, `REG_TIMER1_RIS` at `core.c:238` — which is the usual arrangement
+for an SP804's combined output. `/proc/interrupts` shows the pair sharing one
+line: `35: 405833 0 GIC System Timer Tick, Free Timer`.
+
+### Answers to the specific questions
+
+**Should the initial DT describe one SP804 at `0x20000000` using its two
+internal timers on SPI 3?** Yes, and that is now what `doc/01` and the roadmap
+say.
+
+**Is `0x20010000` a second SP804 on DT SPI 4?** Yes, on both counts.
+
+| Address | `0xFE0`–`0xFEC` | `0xFF0`–`0xFFC` | Decode |
+|---|---|---|---|
+| `0x20000FE0` | `04 18 14 00` | `0D F0 05 B1` | Part `0x804`, designer `0x41` (ARM), rev 1 |
+| `0x20010FE0` | `04 18 14 00` | `0D F0 05 B1` | Identical — a second SP804 |
+| `0x20020FE0` | Bus error | Bus error | No third block |
+
+`irqs.h:7` gives `TIMER23_IRQ = GODNET_IRQ_START + 4` = Linux IRQ 36 = DT SPI 4.
+It is never requested — IRQ 36 does not appear in `/proc/interrupts`.
+
+The control registers confirm which block is live:
+
+| Register | Value | State |
+|---|---|---|
+| `0x20000008`, `0x20000028` | `0xE2` | Enabled, periodic, IRQ enabled, 32-bit |
+| `0x20010008`, `0x20010028` | `0x20` | IRQ enable only, timers **disabled** |
+| `0x20010004`, `0x20010024` | `0xFFFFFFFF` | Reset state, never loaded |
+
+**What does the current binding expect?**
+`Documentation/devicetree/bindings/timer/arm,sp804.yaml` requires `arm,sp804`
+plus `arm,primecell`, one `reg`, one or two interrupts, and either one clock or
+three (timer 1, timer 2, APB) with names `timer1`/`timer2`/`apb_pclk`.
+
+`drivers/clocksource/timer-sp804.c` resolves clocks **by index, not by name** —
+`of_clk_get(np, 0)` for timer 1, and `of_clk_get(np, 1)` for timer 2 only when
+the node declares three — so one clock feeding both is equally valid. It takes a
+single IRQ per node via `irq_of_parse_and_map(np, 0)`, and with
+`arm,sp804-has-irq` absent it makes **timer 1 the clockevent and timer 2 the
+clocksource plus `sched_clock`**. That is exactly the vendor's split, so a
+single node reproduces the working configuration with no property gymnastics.
+
+### One detail worth stating
+
+The ÷2 that gives 155 MHz is external to the block. `CFG_TIMER_PRESCALE` is a
+macro applied to the bus clock in `time.h:20`–`22`, while the SP804's own
+prescale field (control bits 3:2) is zero in the live `0xE2`. So 155 MHz is the
+frequency arriving at the timer, and that is the rate a `clocks` property must
+advertise — not 310 MHz with a divider.
+
+### Changed
+
+| File | What |
+|---|---|
+| `doc/01-soc-overview.md` | Timers section rewritten: one block with two internal timers, the second block identified and marked unused, live control-register evidence, a DTS node, and the prescale note. Register-map and driver/evidence rows updated to match |
+| `doc/16-porting-roadmap.md` | Phase 1 step 2 now says one `arm,sp804` node at `0x20000000` on SPI 3, rather than both bases on IRQ 35 |
