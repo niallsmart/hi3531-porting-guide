@@ -72,13 +72,13 @@ Straightforward. Mainline has `ehci-platform` and `ohci-platform`
 usb_ehci: usb@100b0000 {
     compatible = "hisilicon,hi3531-ehci", "generic-ehci";
     reg = <0x100b0000 0x10000>;
-    interrupts = <0 63 4>;          /* verify SPI numbering */
+    interrupts = <0 31 4>;          /* SPI 31, level-high — vendor IRQ 63 */
 };
 
 usb_ohci: usb@100a0000 {
     compatible = "hisilicon,hi3531-ohci", "generic-ohci";
     reg = <0x100a0000 0x10000>;
-    interrupts = <0 64 4>;          /* verify SPI numbering */
+    interrupts = <0 32 4>;          /* SPI 32, level-high — vendor IRQ 64 */
 };
 ```
 

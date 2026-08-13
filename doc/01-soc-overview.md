@@ -323,7 +323,32 @@ Applying the rule to the peripherals that matter for a server port:
 | Ethernet | 119 | 87 |
 
 In device-tree syntax these become `interrupts = <0 SPI 4>` — GIC type 0 (SPI),
-level-high (4). Verify the trigger type per peripheral before relying on it.
+level-high (4).
+
+> **Use the DT SPI column, not the Linux IRQ column.** The `arm,gic` binding's
+> second cell is the SPI index, not the GIC interrupt ID and not the number
+> `/proc/interrupts` shows. Putting 40 there gets you SPI 40 — GIC ID 72, some
+> other peripheral entirely — and it will not fail loudly.
+
+**Every SPI on this SoC is level-sensitive**, so `4` (`IRQ_TYPE_LEVEL_HIGH`) is
+right for all of them. Read from the live GIC rather than assumed: the
+distributor's configuration registers `GICD_ICFGR2`–`GICD_ICFGR7` at
+`0x20301C08`–`0x20301C1C`, covering IDs 32–127, all read `0x55555555`, which is
+`0b01` in every field — bit 1 clear, level. Only the SGIs and three of the A9's
+own PPIs are edge-triggered:
+
+| Register | Covers | Value | Meaning |
+|---|---|---|---|
+| `GICD_ICFGR0` | IDs 0–15 (SGIs) | `0xAAAAAAAA` | All edge — architecturally fixed |
+| `GICD_ICFGR1` | IDs 16–31 (PPIs) | `0x7DC00000` | Edge on 27 (global timer), 29 (TWD), 30 (private watchdog); level elsewhere |
+| `GICD_ICFGR2`–`7` | IDs 32–127 (SPIs) | `0x55555555` | All level |
+
+The same read confirms the distributor's identity and geometry:
+`GICD_TYPER` at `0x20301004` = `0x0000FC23` — 128 interrupt lines, 2 CPU
+interfaces, security extensions present — and `GICD_IIDR` at `0x20301008` =
+`0x0102043B`, implementer `0x43B` (ARM), revision 2. `GICC_CTLR` at
+`0x20300100` reads `1` and `GICC_PMR` at `0x20300104` reads `0xF0`, the CPU
+interface enabled with Linux's usual priority mask.
 
 ## Timers
 

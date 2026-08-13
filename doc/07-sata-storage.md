@@ -108,7 +108,7 @@ the JMB321 generically. No new drivers should be needed.
 sata: sata@10080000 {
     compatible = "hisilicon,hi3531-ahci", "generic-ahci";
     reg = <0x10080000 0x10000>;
-    interrupts = <0 68 4>;          /* verify SPI numbering */
+    interrupts = <0 36 4>;          /* SPI 36, level-high — vendor IRQ 68 */
     ports-implemented = <0x3>;
 };
 ```

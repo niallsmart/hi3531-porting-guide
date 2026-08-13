@@ -67,10 +67,10 @@ The GIC addresses and the SPI numbering are both settled, from
 `arch/arm/mach-godnet/include/mach/platform.h` and `irqs.h` in the SDK kernel:
 PERIPHBASE is `0x20300000`, giving the distributor at `0x20301000` and the CPU
 interface at `0x20300100`, and the device-tree SPI number is the
-`/proc/interrupts` number minus 32. Both are tabulated in
+`/proc/interrupts` number minus 32. Every SPI is level-sensitive, read from the
+live GIC, so the third cell is `4` (`IRQ_TYPE_LEVEL_HIGH`) throughout. All of it
+is tabulated in
 [01-soc-overview.md](01-soc-overview.md#converting-to-device-tree-spi-numbers).
-What still needs checking per peripheral is the **trigger type** in the third
-interrupt cell.
 
 > **The MCU watchdog is not something a port has to handle.** Once armed, the
 > AT89S52 hard-resets the SoC about 60 seconds after the kicks stop — measured —

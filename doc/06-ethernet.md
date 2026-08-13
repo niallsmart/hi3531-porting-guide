@@ -175,7 +175,7 @@ mainline `stmmac` should be functionally equivalent. Ignore TNK entirely.
 gmac0: ethernet@101c4000 {
     compatible = "hisilicon,hi3531-dwmac", "snps,dwmac-3.60a";
     reg = <0x101c4000 0x2000>;
-    interrupts = <0 119 4>;         /* verify SPI numbering */
+    interrupts = <0 87 4>;          /* SPI 87, level-high — vendor IRQ 119 */
     interrupt-names = "macirq";
     phy-mode = "rgmii-id";          /* UNVERIFIED */
     phy-handle = <&phy1>;

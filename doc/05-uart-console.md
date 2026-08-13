@@ -130,7 +130,7 @@ the easiest parts of the port:
 uart0: serial@20080000 {
     compatible = "arm,pl011", "arm,primecell";
     reg = <0x20080000 0x1000>;
-    interrupts = <0 40 4>;      /* verify GIC SPI numbering offset */
+    interrupts = <0 8 4>;       /* SPI 8, level-high — vendor IRQ 40 */
     clocks = <&uart_clk>, <&apb_clk>;
     clock-names = "uartclk", "apb_pclk";
 };

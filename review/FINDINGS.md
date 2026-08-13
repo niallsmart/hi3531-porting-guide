@@ -12,7 +12,7 @@ than only the cited example; the "Changed" row lists them all.
 | # | Topic | Verdict | Commit |
 |---|---|---|---|
 | 1 | [U-Boot SATA loading](01-uboot-sata-loading.md) | **Confirmed** | `5835778` |
-| 2 | [Device-tree interrupt numbers](02-device-tree-interrupts.md) | Not yet investigated | |
+| 2 | [Device-tree interrupt numbers](02-device-tree-interrupts.md) | **Confirmed** | |
 | 3 | [SP804 timer topology](03-sp804-timer-topology.md) | Not yet investigated | |
 | 4 | [Device-tree handoff from U-Boot](04-device-tree-handoff.md) | Not yet investigated | |
 | 5 | [Access to the upper DRAM bank](05-upper-dram-bank.md) | Not yet investigated | |
@@ -20,9 +20,9 @@ than only the cited example; the "Changed" row lists them all.
 | 7 | [Pinmux provenance and completeness](07-pinmux-map.md) | Not yet investigated | |
 | 8 | [Scope of the register documentation](08-register-documentation.md) | Not yet investigated | |
 | 9 | [GPIO and watchdog confidence](09-gpio-watchdog.md) | Not yet investigated | |
-| 10 | [DDR0 MMZ arithmetic](10-ddr0-mmz-arithmetic.md) | **Confirmed** | |
+| 10 | [DDR0 MMZ arithmetic](10-ddr0-mmz-arithmetic.md) | **Confirmed** | `a6ac3ed` |
 | 11 | [Ethernet DTS details](11-ethernet-dts.md) | Not yet investigated | |
-| 12 | [Internal contradictions](12-internal-contradictions.md) | **Confirmed** (all four) | |
+| 12 | [Internal contradictions](12-internal-contradictions.md) | **Confirmed** (all four) | `a6ac3ed` |
 | 13 | [Register-map completeness](13-register-map-completeness.md) | Not yet investigated | |
 
 ---
@@ -230,9 +230,9 @@ settled: `gic_init(0, GODNET_IRQ_START, …)` with `GODNET_IRQ_START == 32`,
 which is exactly the −32 rule `doc/01` documents.
 
 Nothing here is inferred from the PERIPHBASE convention, so `doc/16`'s
-"unknowns" was wrong on both counts. What does remain open is the per-peripheral
-**trigger type** in the third interrupt cell, which `doc/01` already flags;
-`doc/16` now says that instead.
+"unknowns" was wrong on both counts. The one thing genuinely still open at this
+point was the per-peripheral **trigger type**, and [item 2](#2-device-tree-interrupt-numbers--confirmed)
+closed that too by reading the GIC's configuration registers.
 
 ### Changed
 
@@ -240,5 +240,91 @@ Nothing here is inferred from the PERIPHBASE convention, so `doc/16`'s
 |---|---|
 | `doc/13-audio.md` | Assessment rewritten: NVP1104B codec driver + SIO4 ASoC platform driver, `tlv320aic31xx` ruled out |
 | `doc/20-front-panel-mcu.md` | Stale "two things are not established" paragraph deleted; watchdog-takeover advice split into the two cases |
-| `doc/16-porting-roadmap.md` | GIC/SPI "unknowns" replaced with the settled values and a pointer; trigger type named as the remaining check |
+| `doc/16-porting-roadmap.md` | GIC/SPI "unknowns" replaced with the settled values and a pointer |
 | `doc/01-soc-overview.md` | New [private peripheral region](../doc/01-soc-overview.md#the-cortex-a9-private-peripheral-region) table (SCU, GIC CPU, global timer, TWD, distributor) with the SDK citation; register-map row and GIC evidence row point to it |
+
+---
+
+## 2. Device-tree interrupt numbers — **Confirmed**
+
+Every DTS example put the vendor Linux IRQ number in the SPI cell, contradicting
+the rule the same document set establishes. All five need the SPI value the
+reviewer suggests.
+
+### The encoding a current kernel requires
+
+`Documentation/devicetree/bindings/interrupt-controller/arm,gic.yaml` — three
+cells: `<type, number, flags>`. For `type = 0` (SPI) the second cell is the
+**SPI index**, which the kernel offsets by 32 internally to reach the GIC
+interrupt ID. It is neither the GIC ID nor the number `/proc/interrupts` prints.
+
+This is a silent failure mode, which is why it is worth stating in the document
+rather than only fixing the examples. `interrupts = <0 40 4>` for UART0 is
+well-formed and requests SPI 40 — GIC ID 72, a different peripheral. Nothing
+warns; the console simply never takes an interrupt.
+
+### The corrections
+
+| Peripheral | Was | Now | File |
+|---|---|---|---|
+| UART0 | `<0 40 4>` | `<0 8 4>` | `doc/05-uart-console.md` |
+| Ethernet | `<0 119 4>` | `<0 87 4>` | `doc/06-ethernet.md` |
+| SATA | `<0 68 4>` | `<0 36 4>` | `doc/07-sata-storage.md` |
+| EHCI | `<0 63 4>` | `<0 31 4>` | `doc/08-usb.md` |
+| OHCI | `<0 64 4>` | `<0 32 4>` | `doc/08-usb.md` |
+
+Exactly the five the reviewer predicted. These are all the `interrupts =`
+properties in `doc/`; the sixth DTS block, the `i2c-gpio` node in
+`doc/19-pinmux-map.md`, has none.
+
+### Trigger types — correct, and now measured
+
+The `4` in every example is right. Read from the live GIC distributor rather
+than assumed:
+
+| Register | Address | Value | Covers | Meaning |
+|---|---|---|---|---|
+| `GICD_ICFGR0` | `0x20301C00` | `0xAAAAAAAA` | IDs 0–15, SGIs | All edge — architecturally fixed |
+| `GICD_ICFGR1` | `0x20301C04` | `0x7DC00000` | IDs 16–31, PPIs | Edge on 27, 29, 30; level elsewhere |
+| `GICD_ICFGR2`–`7` | `0x20301C08`–`1C1C` | `0x55555555` | IDs 32–127, SPIs | `0b01` in every field — bit 1 clear, **level** |
+
+So every SPI on this SoC is level-sensitive and `IRQ_TYPE_LEVEL_HIGH` applies
+throughout. The GIC only supports level-high and edge-rising in any case, so
+there is no active-low variant to get wrong.
+
+The three edge PPIs decode as ID 27 global timer, ID 29 private timer (TWD) and
+ID 30 private watchdog — textbook Cortex-A9, and independent corroboration that
+PERIPHBASE is where [item 12](#gic-confidence) puts it.
+
+### Distributor identity
+
+The same read confirms the block itself, which had rested on the SDK header
+alone:
+
+| Register | Address | Value | Decode |
+|---|---|---|---|
+| `GICD_CTLR` | `0x20301000` | `0x00000001` | Enabled |
+| `GICD_TYPER` | `0x20301004` | `0x0000FC23` | 128 interrupt lines, 2 CPU interfaces, security extensions present |
+| `GICD_IIDR` | `0x20301008` | `0x0102043B` | Implementer `0x43B` = ARM, revision 2 |
+| `GICC_CTLR` | `0x20300100` | `0x00000001` | CPU interface enabled |
+| `GICC_PMR` | `0x20300104` | `0x000000F0` | Linux's usual priority mask |
+
+128 lines matches the `NR_IRQS:128` the vendor kernel reports, and 2 CPU
+interfaces matches the dual Cortex-A9.
+
+### Validation against a boot
+
+Not done, and it cannot be from here — this is a documentation exercise and
+booting a mainline kernel is the port itself. What has been done is stronger
+than a desk check: the numbers come from the SDK's `irqs.h`, the trigger types
+and the distributor's geometry come from reading the live GIC, and the two
+agree. A minimal boot remains the final confirmation, as Phase 1 of
+[the roadmap](../doc/16-porting-roadmap.md) already frames it.
+
+### Changed
+
+| File | What |
+|---|---|
+| `doc/05-uart-console.md`, `doc/06-ethernet.md`, `doc/07-sata-storage.md`, `doc/08-usb.md` | SPI values corrected in all five nodes; the "verify SPI numbering" comments replaced with the settled value and its vendor-IRQ cross-reference |
+| `doc/01-soc-overview.md` | Warning that the second cell is the SPI index, not the Linux IRQ; the ICFGR/TYPER/IIDR evidence for level-high throughout |
+| `doc/16-porting-roadmap.md` | Trigger type no longer listed as an open per-peripheral check |
