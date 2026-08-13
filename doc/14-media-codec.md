@@ -46,12 +46,26 @@ prebuilt `.ko` files and prebuilt userspace libraries — there is no source for
 the media blocks, only headers and samples. They are compiled against kernel
 3.0.8 with a specific vermagic and will not load on any other kernel.
 
-**2. There is no public register documentation.**
+**2. There is no register documentation for the codec blocks.**
 
-The Hi3531 datasheet in `00.hardware/chip/` documents the SoC at the level
-needed for board design. It does not contain the register-level programming
-model for the codec blocks — that was only ever available to HiSilicon
-customers under NDA, if at all.
+This is specific, and worth stating precisely, because most of the SoC *is*
+documented. The Hi3531 datasheet gives a register summary and per-register
+descriptions for the great majority of its blocks — including video capture
+(VICAP) and video display (VDP). It does not for these:
+
+| Block | Chapter | What the chapter contains |
+|---|---|---|
+| VDH — H.264/MPEG decoder | 6.1 | Overview, function description, operating mode. No registers |
+| JPGD — JPEG decoder | 6.2 | Same |
+| VEDU — H.264 encoder | 7.2 | Overview, features, function description. No registers |
+| JPGE — JPEG encoder | 7.3 | Same |
+| TDE, VPSS, VCMP | 8.1–8.3 | Same |
+
+Every chapter that stops before its register sections is a block on the codec
+and graphics path. That is not an accident of drafting — it is the boundary of
+what HiSilicon published, and it falls exactly around the IP this document is
+about. The full coverage map is in
+[18-reference-assets.md](18-reference-assets.md#the-hi3531-datasheet--what-it-does-and-does-not-document).
 
 **3. `hi3531_vfmw.ko` is 6.6 MB.**
 

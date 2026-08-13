@@ -37,9 +37,14 @@ CPU, memory and UART are equally conventional.
    the no-flash-writes constraint, and leaves the original firmware intact as a
    fallback. The kernel cannot be loaded from SATA itself: this U-Boot has no
    `sata` command.
-3. **The media hardware is a genuine dead end** — proprietary binary modules, no
-   public register documentation, a 6.6 MB firmware blob, and a custom FPGA
-   bitstream. For a server this costs nothing, since none of it is needed.
+3. **The H.264 codec path is a genuine dead end** — proprietary binary modules,
+   a 6.6 MB firmware blob, and the only chapters in the whole datasheet that
+   stop short of their register descriptions. The rest of the media hardware is
+   documented: video capture and video display both have full register maps,
+   and what blocks *those* is the undocumented analogue decoder and FPGA in
+   front of them, plus an undocumented on-chip HDMI transmitter behind. For a
+   server none of it is needed. See
+   [18-reference-assets.md](18-reference-assets.md#the-hi3531-datasheet--what-it-does-and-does-not-document).
 
 ## Table of contents
 

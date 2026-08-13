@@ -78,7 +78,7 @@ does, because the SDK's board material describes HiSilicon's demo board.
 
 | File | Why |
 |---|---|
-| `rootfs/mtd/modules/pinctrl_*.sh` | **108 IO_CONFIG registers with their full function tables.** Closed the pinmux and I²C pin questions outright — see [19-pinmux-map.md](19-pinmux-map.md) |
+| `rootfs/mtd/modules/pinctrl_*.sh` | Which IO_CONFIG value the vendor writes per board variant. **Use them for values only** — their function-name comments are unreliable, see [19-pinmux-map.md](19-pinmux-map.md) |
 | `rootfs/mtd/modules/load3531` | The active module load script: MMZ zone layout, which drivers are and are not used |
 | `rootfs/mtd/dep2.sh` | Selects the board variant (`load3531 -i 4hd`) |
 | `rootfs/mtd/boot.sh` | `stmmac` module parameters, PHY addresses |
@@ -117,7 +117,7 @@ user: root
 pass: 1001chin
 ```
 
-The device runs BusyBox. `himm`, `himd` and `msh` are in `/bin`.
+The device runs BusyBox. `devmem` is available, as are `himm`, `himd`, `himd.l` and `himc` — all symlinks to `/bin/btools`.
 
 A scripted wrapper lives in the working scratchpad as `dvr.exp`:
 
@@ -131,9 +131,10 @@ Two details make this fiddly and are worth knowing before rewriting it:
    echoes what is typed, so a naive `echo END` marker matches on the echo rather
    than the output. The script splits markers with shell concatenation
    (`"EN""D"`) so the literal never appears in the typed line.
-2. **`himm` is interactive.** It prints the value then waits at `NewValue:` for
-   a write. A script that sends a bare newline there may write to the register.
-   Use U-Boot `md` for register reads instead — see
+2. **Never let a script run `himm`.** It is a memory *modify* tool: with one
+   argument it prints the value then waits at `NewValue:` for a write, so a
+   bare newline can write to the register. Use `devmem` or `himd.l` for
+   read-only access under Linux — see
    [17-register-dumps.md](17-register-dumps.md).
 
 ### Serial console
@@ -240,6 +241,75 @@ NVP1104B Overview.pdf                  4-channel analog video decoder (U19)
 SP490E SP491E RS-485 Transceiver.pdf   RS485 transceiver (U34)
 SGM9119 Video Filter Driver.pdf        SD video filter driver (U17)
 ```
+
+### The Hi3531 datasheet — what it does and does not document
+
+`00.hardware/chip/documents_en/Hi3531 H.264 Codec Processor Data Sheet.pdf`,
+Issue 09 (2015-02-09), 1794 pages. It is the SoC register manual, not a
+board-design summary, and it is the first place to look for anything
+chip-level.
+
+Most chapters follow the pattern Overview → Features → Function Description →
+Operating Mode → **Register Summary** → **Register Description**, the last two
+giving a table of offsets and then a page per register with bit fields. **A
+chapter that stops before those two sections is a block you cannot program from
+this document.** That distinction is what separates the genuinely closed
+hardware on this SoC from the merely undriven.
+
+| Block | Chapter | Registers documented |
+|---|---|---|
+| Reset, clock (CRG) | 3.1, 3.2 | Yes |
+| Interrupt system | 3.3 | No — it is the ARM GIC, described by reference |
+| System controller | 3.4 | Yes |
+| DMA controller | 3.5 | Yes |
+| CIPHER | 3.6 | Yes |
+| Timer | 3.7 | Yes |
+| Watchdog | 3.8 | Yes |
+| RTC | 3.9 | Yes |
+| Power management and low-power modes | 3.10 | No — description only |
+| Cortex-A9 and L2 cache | 3.11 | No — description only |
+| DDR controller | 4.1 | Yes |
+| NAND controller | 4.2 | Yes |
+| SPI flash controller | 4.3 | Yes |
+| GMAC / TOE | 5 | Yes |
+| **VDH — H.264/MPEG decoder** | 6.1 | **No** |
+| **JPGD — JPEG decoder** | 6.2 | **No** |
+| **VEDU — H.264 encoder** | 7.2 | **No** |
+| **JPGE — JPEG encoder** | 7.3 | **No** |
+| **TDE — 2D graphics engine** | 8.1 | **No** |
+| **VPSS — scaler and pre-processor** | 8.2 | **No** |
+| **VCMP** | 8.3 | **No** |
+| Motion detection | 9 | Yes |
+| IVE — intelligent video engine | 10 | Yes |
+| **VICAP — video capture** | 11.1 | **Yes** — around 85 pages |
+| **VDP — video display** | 11.2 | **Yes** |
+| **HDMI transmitter** | — | **No — it has no chapter at all** |
+| Audio encoding (VOIE) | 12 | Yes |
+| SIO — audio interfaces | 13.1 | Yes |
+| I²C controller | 14.1 | Yes |
+| SPI controller | 14.2 | Yes |
+| UART | 14.3 | Yes |
+| IR receiver | 14.4 | Yes |
+| GPIO | 14.5 | Yes |
+| USB 2.0 host | 14.6 | Yes |
+| MMC/SD/SDIO | 14.7 | Yes |
+| PCI Express | 14.8 | Yes — section 14.8.5 |
+| SATA | 14.9 | Yes |
+
+Base addresses are in
+[01-soc-overview.md](01-soc-overview.md#register-base-map). Section 1 of the
+datasheet carries its own address map, which covers more blocks than that
+table does.
+
+Two quirks when searching it: the section headings for the watchdog and the
+NAND controller lost a space in typesetting and read `WatchDogRegister Summary`
+and `NANDCRegister Summary`, so a search for "Register Summary" misses them.
+And the datasheet's block name is not always the name the vendor SDK uses —
+what MPP calls the VOU is the **VDP** here, and what `doc/11` calls the VIU is
+the **VICAP**.
+
+Extract the text with `pdftotext -layout`; the tables survive well enough to
+parse.
 
 ## Building binaries for the DVR
 

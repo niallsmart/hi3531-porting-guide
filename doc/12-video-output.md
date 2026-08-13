@@ -22,7 +22,8 @@ From `/proc/umap/vo` on the running device:
 | 3 | CVBS | NTSC (720x480) | 30 Hz | Composite (spot monitor) |
 
 Device 1 drives VGA and HDMI from the same timing generator, which is why both
-are limited to 800x600@60. Device 1 was showing a 4-channel view with
+run at the same 800x600@60. That is the vendor's choice of mode, not a hardware
+limit — the SoC does 1080p60 on HDMI and up to 2560x1600@60 on VGA. Device 1 was showing a 4-channel view with
 picture-in-picture enabled (`EnChNum 4`, a second entry with `PiP Y` at
 704x480).
 
@@ -141,15 +142,34 @@ Linux starts — see [03-boot-chain.md](03-boot-chain.md).
 
 ## Assessment
 
-No mainline path. The VOU, `hifb` and TDE are all proprietary HiSilicon blocks
-with no public register documentation and no open drivers. Writing a DRM/KMS
-driver would require the register-level detail in the Hi3531 datasheet and a
-substantial amount of work, for an 800x600 output on a machine intended as a
-headless server.
+No mainline path, but the obstacles are not evenly distributed and the earlier
+blanket claim that none of these blocks is documented was wrong.
+
+| Block | Base | Documented? |
+|---|---|---|
+| **VDP** — the display controller, what MPP calls the VOU | `0x205C0000` | **Yes** — chapter 11.2, register summary and descriptions |
+| **HDMI transmitter** | `0x205D0000` | **No.** The address map lists the block; the datasheet has no chapter for it |
+| **TDE** — 2D graphics engine | `0x20610000` | **No** — chapter 8.1 stops at the functional description |
+| **VPSS** — scaler | `0x20600000` | **No** — chapter 8.2, likewise |
+
+So a DRM/KMS driver for VGA output is *possible* from documentation: VDP is the
+scanout engine and it is fully described. HDMI is not, which matters because
+the transmitter is inside the SoC rather than an external bridge — there is no
+`sii902x` to fall back on. TDE and VPSS are unavailable, so acceleration and
+hardware scaling are out; a driver would be dumb-framebuffer scanout.
+
+That is a large project for a headless server, and the recommendation does not
+change. But "leave it alone because it is a server" is the reason, not "the
+hardware is undocumented".
+
+**800x600 is this board's configuration, not the hardware's ceiling.** The
+datasheet gives a maximum of **1080p60 for HDMI** and **2560x1600 at 60 Hz for
+VGA**. The observed mode comes from the vendor application choosing a timing
+that suits a 4-channel DVR view on both outputs at once.
 
 **Recommendation: leave video output alone.** Use the serial console and SSH.
-If a display is ever genuinely needed, the honest assessment is that it is a
-large project on its own.
+If a display is ever genuinely needed, VGA through VDP is the tractable path
+and HDMI is not.
 
 One practical note: U-Boot initialises the video output before Linux starts.
 A modern kernel that does not touch the VOU will leave whatever U-Boot drew on

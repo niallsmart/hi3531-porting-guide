@@ -289,9 +289,25 @@ meaning **no cameras were connected** at capture time.
 
 ## Assessment
 
-Not portable in any practical sense. It requires: an undocumented Nextchip
-decoder, an undocumented FPGA bitstream, and the proprietary HiSilicon VIU
-block with no public register documentation and no mainline driver.
+Not portable in any practical sense — but be precise about why, because one of
+the three obstacles turns out not to be one.
+
+| Obstacle | Real? |
+|---|---|
+| The Nextchip NVP1104B decoder | **Yes.** Only an overview document is public; no register map |
+| The Lattice FPGA bitstream | **Yes.** Custom, undocumented, no I²C address or register map recovered |
+| The SoC capture block | **No.** VICAP at `0x20580000` is fully documented — chapter 11.1 of the Hi3531 datasheet, with a register summary and roughly 85 pages of register descriptions |
+
+So the SoC side of video capture is programmable from the datasheet, and a
+V4L2 driver for VICAP is a normal, if large, driver-writing job. What blocks
+this board is everything *in front of* VICAP: the analogue decoder and the FPGA
+that reformats its output into BT.1120. Neither can be programmed without
+documentation nobody has.
+
+The distinction matters for anyone reusing this SoC on a board that feeds
+VICAP from a documented source. See
+[18-reference-assets.md](18-reference-assets.md#the-hi3531-datasheet--what-it-does-and-does-not-document)
+for what else the datasheet covers.
 
 What *is* recorded here — the I²C address, the chip identity, the BT.1120
 configuration, the channel mapping — is enough for someone to pick up the

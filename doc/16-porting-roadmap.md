@@ -145,8 +145,8 @@ In rough order of value:
 | L2 cache | Medium | Forward-port the vendor `cache-hil2v200.c`; performance only, boots without it |
 | Front panel, buzzer, alarm relays | Low–medium | All behind the AT89S52 on `ttyAMA1`. Protocol fully recovered and verified on the wire — userspace serial, no kernel driver needed |
 | Audio | High | Needs an ASoC platform driver written from scratch |
-| Video output | Very high | Proprietary VOU, no documentation |
-| Video capture | Impractical | See [11-video-input.md](11-video-input.md) |
+| Video output | Very high | VDP (the scanout block) is documented, so dumb-framebuffer VGA is possible. The on-chip HDMI transmitter is not documented, and TDE/VPSS are not, so no acceleration and no HDMI. 800x600 is the vendor's mode, not a limit — the SoC does 2560x1600 on VGA |
+| Video capture | Impractical | VICAP itself is fully documented; the analogue decoder and FPGA feeding it are not. See [11-video-input.md](11-video-input.md) |
 | H.264 codec | Impossible | See [14-media-codec.md](14-media-codec.md) |
 
 ## Open questions
@@ -207,7 +207,13 @@ Where the answers to the most commonly needed questions live.
 ### Out of scope
 
 Not documented beyond what appears elsewhere in this set: the internals of the
-proprietary media pipeline, and the auto-update mechanism's image format.
+H.264 codec path, and the auto-update mechanism's image format.
+
+Note that "media" and "undocumented" are not the same set. The datasheet has
+register descriptions for every block on this SoC except the codecs (VDH, VEDU,
+JPGD, JPGE), the graphics blocks (TDE, VPSS, VCMP) and the HDMI transmitter.
+Coverage map in
+[18-reference-assets.md](18-reference-assets.md#the-hi3531-datasheet--what-it-does-and-does-not-document).
 
 ## Risks
 

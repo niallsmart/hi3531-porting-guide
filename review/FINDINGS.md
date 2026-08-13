@@ -18,7 +18,7 @@ than only the cited example; the "Changed" row lists them all.
 | 5 | [Access to the upper DRAM bank](05-upper-dram-bank.md) | **Confirmed** | `6193589` |
 | 6 | [Secondary CPU startup](06-secondary-cpu-startup.md) | **Confirmed** | `1c7094d` |
 | 7 | [Pinmux provenance and completeness](07-pinmux-map.md) | **Confirmed** | `7723da3` |
-| 8 | [Scope of the register documentation](08-register-documentation.md) | Not yet investigated | |
+| 8 | [Scope of the register documentation](08-register-documentation.md) | **Confirmed** | |
 | 9 | [GPIO and watchdog confidence](09-gpio-watchdog.md) | Not yet investigated | |
 | 10 | [DDR0 MMZ arithmetic](10-ddr0-mmz-arithmetic.md) | **Confirmed** | `a6ac3ed` |
 | 11 | [Ethernet DTS details](11-ethernet-dts.md) | Not yet investigated | |
@@ -843,3 +843,93 @@ above, which is where both duplicates came from.
 | `doc/16-porting-roadmap.md` | Quick-reference row; SD/MMC row notes the pin clash |
 | `doc/18-reference-assets.md` | Datasheet listed as the source for the pinmux map |
 | `doc/README.md` | Table-of-contents entry; gaps table no longer implies chip-level detail is missing; capture-method note mentions `devmem` |
+
+---
+
+## 8. Scope of the register documentation — **Confirmed**
+
+The observation is right on every count. Several documents said "the media
+hardware has no public register documentation" when what is true is much
+narrower: **the codec and graphics blocks have no register documentation, and
+almost everything else on the SoC does, including video capture and video
+display.**
+
+### Evidence
+
+Most chapters of the datasheet follow Overview → Features → Function
+Description → Operating Mode → **Register Summary** → **Register Description**.
+A chapter that stops before the last two cannot be programmed from the
+document. Enumerating those two headings across all 1794 pages gives a clean
+partition:
+
+**Documented** — reset and clock (3.1, 3.2), system controller (3.4), DMA
+(3.5), CIPHER (3.6), timer (3.7), watchdog (3.8), RTC (3.9), DDRC (4.1), NAND
+controller (4.2), SPI flash controller (4.3), GMAC/TOE (5), motion detection
+(9), IVE (10), **VICAP (11.1)**, **VDP (11.2)**, audio encoding (12), SIO
+(13.1), I²C (14.1), SPI (14.2), UART (14.3), IR (14.4), GPIO (14.5), USB
+(14.6), MMC/SD/SDIO (14.7), PCIe (14.8.5), SATA (14.9).
+
+**Not documented** — VDH (6.1), JPGD (6.2), VEDU (7.2), JPGE (7.3), TDE (8.1),
+VPSS (8.2), VCMP (8.3), and the HDMI transmitter, which has a 64 KB block at
+`0x205D0000` in the address map and no chapter at all. Power management (3.10)
+and the Cortex-A9/L2 chapter (3.11) are descriptive, but both are standard ARM
+IP documented elsewhere.
+
+Every undocumented block sits on the codec and graphics path. That is the
+boundary of what HiSilicon published, and it is a much tighter boundary than
+the documentation claimed.
+
+Two search traps: the headings for the watchdog and NAND controller lost a
+space in typesetting — `WatchDogRegister Summary`, `NANDCRegister Summary` — so
+a plain search for "Register Summary" misses both and makes the coverage look
+worse than it is.
+
+### Answers to the four questions
+
+**Which blocks genuinely lack a usable programming model?** VDH, JPGD, VEDU,
+JPGE, TDE, VPSS, VCMP and the HDMI transmitter. Nothing else on the SoC.
+
+**Should the codec conclusions be kept separate from VICAP, VDP, GPIO and IVE?**
+Yes, and they now are. `doc/14`'s conclusion about the MPP stack and the 6.6 MB
+firmware blob was always correct and is unchanged; what changed is that it no
+longer implies anything about the rest of the SoC.
+
+**Is 800x600 the board's configuration rather than its limit?** Its
+configuration. The datasheet gives a maximum of 1080p60 for HDMI and
+2560x1600@60 for VGA. The vendor drives both outputs from one timing generator
+on device 1, which is why they share a mode.
+
+**How should the estimates change?**
+
+| Path | Before | Now |
+|---|---|---|
+| Video capture | Impractical — undocumented SoC block | Still impractical, but VICAP is not the reason. The analogue decoder and the FPGA in front of it are |
+| Video output | Very high — no documentation | Very high — but VGA scanout through VDP is documented and tractable. HDMI is not, and there is no external bridge to fall back on because the transmitter is on-die. No TDE or VPSS means no acceleration or hardware scaling |
+| H.264 encode/decode | Impossible | Unchanged |
+
+Neither moves off the optional list for a headless server, but the reason for
+leaving video output alone is now its size, not a claim about documentation
+that was false.
+
+### Also found
+
+The datasheet's own address map in section 1 is materially more complete than
+`doc/01`'s register base map. It lists blocks that are absent there —
+hardware I²C at `0x200D0000`, hardware SPI at `0x200C0000`, SIO0–SIO5, DMA at
+`0x100D0000`, CIPHER at `0x100C0000`, JPGD, SCD0/SCD1, BOOTROM at `0x04000000`,
+on-chip RAM at `0x04010000` — and **two more SP804 timer blocks**, Timer2 at
+`0x20130000` and Timer3 at `0x20140000`, where `doc/01` says there are two.
+It also shows an address-remap region at `0x00000000`–`0x03FFFFFF`, which is
+what CPU1's holding code (item 6) executes from. Left for item 13, which is
+about exactly this.
+
+### Changed
+
+| File | What |
+|---|---|
+| `doc/18-reference-assets.md` | New "what the datasheet does and does not document" section with the full per-block coverage table and the two search traps; corrected the stale claims that the pinctrl scripts closed the pinmux question and that U-Boot `md` is the only safe register read |
+| `doc/11-video-input.md` | Assessment now separates the three obstacles and states that VICAP is documented; the blockers are the decoder and the FPGA |
+| `doc/12-video-output.md` | Per-block documentation table; VGA scanout via VDP identified as the tractable path; 800x600 corrected to the vendor's mode, with the real maxima |
+| `doc/14-media-codec.md` | Claim narrowed from "no public register documentation" to the specific chapters that stop short, with the table |
+| `doc/16-porting-roadmap.md` | Video capture and video output rows rewritten; out-of-scope note distinguishes "media" from "undocumented" |
+| `doc/README.md` | Finding 3 narrowed to the H.264 codec path |
