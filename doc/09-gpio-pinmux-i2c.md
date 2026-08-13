@@ -27,18 +27,103 @@ GPIO group n base = 0x20150000 + n * 0x10000     for n = 0 .. 18
 | GPIO8 | `0x201D0000` | GPIO18 | `0x20270000` |
 | GPIO9 | `0x201E0000` | | |
 
-Each group appears to follow the ARM PL061 convention, based on the offsets the
-SDK drivers use:
+Groups 0–17 have eight pins each; **GPIO18 has only six**, so there are 150
+pins in total, not 152.
 
-| Offset | Register |
-|---|---|
-| `+0x000`–`0x3FC` | Data registers, address-masked by bit (PL061 style) |
-| `+0x400` | Direction (`GPIO_DIR`) |
+### The register layout is PL061
 
-The SDK's bit-banged I²C driver reads and writes a pin by addressing
-`base + (1 << pin) * 4` — the PL061 masked-access scheme — which strongly
-suggests these are PL061 or a close clone. Mainline `gpio-pl061` may work
-directly, but this has **not been verified against the Hi3531 datasheet**.
+Confirmed against chapter 14.5.5 of the Hi3531 datasheet, which gives the
+offsets and reset values in full:
+
+| Offset | Register | PL061 equivalent |
+|---|---|---|
+| `+0x000`–`0x3FC` | `GPIO_DATA` — address-masked by `PADDR[9:2]` | `GPIODATA` |
+| `+0x400` | `GPIO_DIR` — direction | `GPIODIR` |
+| `+0x404` | `GPIO_IS` — level or edge | `GPIOIS` |
+| `+0x408` | `GPIO_IBE` — both edges | `GPIOIBE` |
+| `+0x40C` | `GPIO_IEV` — polarity | `GPIOIEV` |
+| `+0x410` | `GPIO_IE` — mask | `GPIOIE` |
+| `+0x414` | `GPIO_RIS` — raw status | `GPIORIS` |
+| `+0x418` | `GPIO_MIS` — masked status | `GPIOMIS` |
+| `+0x41C` | `GPIO_IC` — clear | `GPIOIC` |
+
+Byte-for-byte the PL061 map, including the masked-data scheme the SDK's
+bit-banged I²C driver relies on. Out of reset all pins are inputs, all
+registers zero, and the trigger mode is edge-sensitive — again standard.
+
+### But the blocks have no AMBA identity
+
+**This is the part that stops `gpio-pl061` working out of the box.** The
+datasheet's register summary ends at `+0x41C`, and the PrimeCell identification
+registers a real PL061 carries at `+0xFE0`–`+0xFFC` are simply not implemented.
+Reading them on the live device returns stable nonsense rather than an ID:
+
+```
+GPIO0  +0xFE0: 31F28401 1031FBDD FF7D54C4 1C88B7F9   (should be 61 10 04 00)
+GPIO5  +0xFE0: CDFF1303
+GPIO12 +0xFF0: FD7D4188 48047FFE 79DF2601 04406FDF   (should be 0D F0 05 B1)
+```
+
+The values are repeatable and differ between blocks, so this is bus behaviour
+for an undecoded region, not a floating read. Compare the watchdog at
+`0x20040000`, which *is* a real PrimeCell and returns a clean `0x805` with the
+`0D F0 05 B1` signature — see
+[10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#the-ip-is-an-sp805).
+
+Mainline `gpio-pl061` is an `amba_driver` matching on
+`.id = 0x00041061, .mask = 0x000fffff`. The AMBA bus reads those registers to
+build the ID, so a plain `compatible = "arm,pl061", "arm,primecell"` node will
+never match. **The fix is one property**, which makes `amba_device_add()` skip
+the hardware read entirely:
+
+```dts
+gpio12: gpio@20210000 {
+    compatible = "arm,pl061", "arm,primecell";
+    reg = <0x20210000 0x1000>;
+    arm,primecell-periphid = <0x00041061>;   /* IDs are not implemented */
+    interrupts = <0 82 4>;                   /* SPI 82 — shared with GPIO11 */
+    gpio-controller;
+    #gpio-cells = <2>;
+    interrupt-controller;
+    #interrupt-cells = <2>;
+    clocks = <&apb_clk>;
+    clock-names = "apb_pclk";
+};
+```
+
+### Interrupts, and a complication above GPIO6
+
+From the datasheet's interrupt table. Subtract 32 for the device-tree SPI
+number:
+
+| Groups | Linux IRQ | DT SPI |
+|---|---|---|
+| GPIO0 … GPIO6 | 105 … 111 | 73 … 79 |
+| GPIO7 **and** GPIO8 | 112 | 80 |
+| GPIO9 **and** GPIO10 | 113 | 81 |
+| GPIO11 **and** GPIO12 | 114 | 82 |
+| GPIO13 **and** GPIO14 | 115 | 83 |
+| GPIO15 **and** GPIO16 | 116 | 84 |
+| GPIO17 **and** GPIO18 | 117 | 85 |
+
+Each block ORs its eight pins into one line, which is normal PL061. What is not
+normal is that **the twelve blocks above GPIO6 share six GIC lines between
+them.** `gpio-pl061` installs a *chained* parent handler
+(`girq->parent_handler = pl061_irq_handler`), and a chained handler owns its
+parent line outright — declaring two nodes on SPI 82 means the second
+`irq_set_chained_handler_and_data()` displaces the first, and one of the two
+blocks silently stops delivering interrupts.
+
+Nothing in a server build needs GPIO interrupts, so the simple course is to
+omit `interrupts` from the paired nodes and use them for output and polled
+input. If a paired block genuinely needs interrupts, give the line to one node
+of the pair only, or write a small demultiplexing irqchip.
+
+GPIO0–GPIO6 have dedicated lines and are unaffected.
+
+Trigger types are the full PL061 set — level or edge via `GPIO_IS`, polarity
+via `GPIO_IEV`, both-edges via `GPIO_IBE` — so `#interrupt-cells = <2>` with
+the usual `IRQ_TYPE_*` flags behaves as expected.
 
 ## Pin multiplexing
 
@@ -126,7 +211,7 @@ peripherals are needed to boot and run.
 
 If you do want them:
 
-- Try `gpio-pl061` for the GPIO groups; verify against the datasheet.
+- Use `gpio-pl061` for the GPIO groups, with `arm,primecell-periphid = <0x00041061>` on every node — the blocks are PL061 but carry no AMBA ID, so the driver cannot match without it. Watch the shared interrupts above GPIO6.
 - Use mainline `i2c-gpio` on GPIO12_4/GPIO12_5 to recreate the bit-banged bus,
   then attach `rtc-ds1307` for the RTC. This replaces the whole vendor
   `gpioi2c` stack with mainline code. (Do **not** plan on `sii902x` for HDMI —

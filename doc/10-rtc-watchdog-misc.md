@@ -43,6 +43,38 @@ So **mainline `wdt-sp805` applies directly** — a device-tree node with
 `compatible = "arm,sp805"` and the APB clock is all that is needed. This was
 previously recorded as a guess.
 
+Unlike the GPIO blocks, which have the PL061 register layout but no AMBA
+identity at all, the watchdog is a genuine PrimeCell and needs no
+`arm,primecell-periphid` override. See
+[09-gpio-pinmux-i2c.md](09-gpio-pinmux-i2c.md#but-the-blocks-have-no-amba-identity).
+
+Chapter 3.8 of the datasheet gives the full register map — `WdogLoad`,
+`WdogValue`, `WdogControl`, `WdogIntClr`, `WdogRIS`, `WdogMIS`, `WdogLock` with
+the standard `0x1ACCE551` unlock key — matching SP805 exactly.
+
+The watchdog IRQ is **34**, so `interrupts = <0 2 4>`.
+
+### The counting clock is 3 MHz
+
+Measured on the running device, since the timeout depends on it and no clock
+tree documentation covers this branch. `WdogValue` was read twice five seconds
+apart:
+
+```
+0x08E91F7A  ->  0x08039BB2      15,041,480 ticks in 5 s  =  3.008 MHz
+```
+
+So **3 MHz**, and that is what the node's `clocks` property has to advertise
+for the driver's timeout arithmetic to come out right. It also explains
+`WdogLoad`, which reads `0x0ABA9500` = 180,000,000 = exactly **60 seconds**.
+
+Note that the 60-second figure in the table above is the vendor Linux driver's
+module parameter — but the driver programs the hardware to match it, so on this
+system the two agree. Remember SP805 semantics when reasoning about the
+consequences: the first expiry raises an interrupt, and the reset only happens
+if a *second* expiry arrives with the first interrupt still outstanding. From
+the last kick that is 120 seconds, not 60.
+
 ### U-Boot disables it before booting Linux
 
 ```
@@ -53,18 +85,27 @@ dog_close
 ```
 
 The practical consequence is that Linux inherits a disabled watchdog and
-nothing has to service it.
+nothing has to service it. **The vendor kernel then turns it back on.** Under
+the running firmware:
 
-Whether the block is *enabled coming out of reset* is not established. U-Boot
-closing it explicitly suggests something upstream — the boot ROM, most likely —
-turns it on, but a stock SP805 is disabled after reset, and the close happens
-during U-Boot init before the prompt is reachable, so there is no way to
-observe the prior state from here. If you replace the bootloader, disable it
+```
+WdogControl  0x20040008 = 0x00000003    INTEN | RESEN — armed, will reset
+WdogLoad     0x20040000 = 0x0ABA9500    60 s at 3 MHz
+WdogLock     0x20040C00 = 0x00000001    locked; registers write-protected
+```
+
+`wdt.ko` arms it and `/dev/watchdog` exists, so something in the vendor
+application is kicking it. This does not reach a port — U-Boot runs before your
+kernel and disables it — but it does mean a *live* takeover of the running
+system inherits an armed 60-second watchdog, the same trap as the MCU watchdog
+below.
+
+Whether the block is *enabled coming out of reset* is still not established.
+U-Boot closing it explicitly suggests something upstream — the boot ROM, most
+likely — turns it on, but a stock SP805 is disabled after reset, and the close
+happens during U-Boot init before the prompt is reachable, so there is no way
+to observe the prior state from here. If you replace the bootloader, disable it
 yourself early rather than assuming either way.
-
-Note also that the 60-second figure in the table is the *vendor Linux driver's*
-module parameter. It says nothing about the hardware timeout that would apply
-with no driver loaded.
 
 ### There is a second watchdog
 

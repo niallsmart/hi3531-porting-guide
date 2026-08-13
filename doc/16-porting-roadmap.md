@@ -116,9 +116,17 @@ Two failure modes to recognise if the memory does not appear:
 
 ## Phase 3 — Ethernet
 
-`stmmac` with a small glue driver for the CRG and pinmux writes. See
-[06-ethernet.md](06-ethernet.md). Expect the RGMII mode and delay settings to
-need experimentation.
+`stmmac` on **GMAC1 at `0x101C4000`** — the second instance, which is the one
+wired to the connector. GMAC0 has no PHY; leave it out of the tree.
+
+Use `compatible = "snps,dwmac"` for bring-up, not `snps,dwmac-3.60a`, which the
+upstream binding does not accept. The pinmux needs nothing: RGMII1 is already
+muxed by U-Boot and Linux never touches it. The work is a glue driver
+implementing `fix_mac_speed` against `CRG + 0xEC` bits [31:16].
+
+See [06-ethernet.md](06-ethernet.md). If the link comes up but no traffic
+passes, that is RGMII delay, and it is a board-level strap question — no driver
+in this path can set it.
 
 Success criterion: DHCP and SSH.
 
@@ -138,7 +146,7 @@ In rough order of value:
 | Item | Effort | Notes |
 |---|---|---|
 | **The second CPU** | Low–medium | ~30 lines of `smp_operations`: enable the SCU, write `__pa_symbol(secondary_startup)` to `SYS_CTRL + 0x134`. No reset or IPI needed — U-Boot leaves CPU1 running and polling. Also enable `ARM_ERRATA_764369` and `775420` for A9 r3p0 SMP. [Detail](01-soc-overview.md#secondary-cpu-startup) |
-| Watchdog | Low | Confirmed ARM SP805 — `arm,sp805` node and the APB clock |
+| Watchdog | Low | Confirmed ARM SP805, a genuine PrimeCell — `arm,sp805`, SPI 2, and a 3 MHz clock (measured) |
 | USB | Low–medium | Standard EHCI/OHCI, needs PHY glue |
 | RTC | Low | On-chip PL031 (`arm,pl031`) is trivial but has no battery. Battery-backed external chip needs `i2c-gpio` + `rtc-ds1307`; pins are known |
 | SD/MMC | Medium | `dw_mmc` may fit; socket may not exist. Its pins are function 4 of the `VIU3` run, so it excludes the fourth video input |
@@ -186,7 +194,9 @@ Where the answers to the most commonly needed questions live.
 | How much RAM, and where? | 512 MB at `0x80000000`, 512 MB at `0xC0000000` | [02-memory-map.md](02-memory-map.md) |
 | Why is only half the RAM showing? | DDR1 is outside a 3G-split kernel's low-memory window — use `VMSPLIT_2G` | [02-memory-map.md](02-memory-map.md#making-both-banks-usable) |
 | Device-tree interrupt numbers? | SPI = `/proc/interrupts` number − 32 | [01-soc-overview.md](01-soc-overview.md) |
-| Ethernet `phy-mode`? | Plain `rgmii`, plus the CRG+0xEC bit layout | [06-ethernet.md](06-ethernet.md) |
+| Ethernet `phy-mode`? | Plain `rgmii` — but no driver in the path acts on it | [06-ethernet.md](06-ethernet.md#interface-mode) |
+| Which Ethernet MAC is wired up? | GMAC1 at `0x101C4000` = `eth0`, on RGMII1, CRG+0xEC bits [31:16] | [06-ethernet.md](06-ethernet.md) |
+| Will `gpio-pl061` just work? | Only with `arm,primecell-periphid = <0x00041061>` — the blocks have no AMBA ID | [09-gpio-pinmux-i2c.md](09-gpio-pinmux-i2c.md#but-the-blocks-have-no-amba-identity) |
 | Where is the MAC address? | `/etc/init.d/mac.dat`; factory master at SPI-NOR `0xBFC20` | [04-flash-storage.md](04-flash-storage.md) |
 | Bit-banged I²C pins? | SDA = GPIO12_4, SCL = GPIO12_5 | [19-pinmux-map.md](19-pinmux-map.md) |
 | What is each pinmux register? | All 151, from the chip datasheet, with this board's live values | [19-pinmux-map.md](19-pinmux-map.md) |

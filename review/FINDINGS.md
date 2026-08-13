@@ -18,10 +18,10 @@ than only the cited example; the "Changed" row lists them all.
 | 5 | [Access to the upper DRAM bank](05-upper-dram-bank.md) | **Confirmed** | `6193589` |
 | 6 | [Secondary CPU startup](06-secondary-cpu-startup.md) | **Confirmed** | `1c7094d` |
 | 7 | [Pinmux provenance and completeness](07-pinmux-map.md) | **Confirmed** | `7723da3` |
-| 8 | [Scope of the register documentation](08-register-documentation.md) | **Confirmed** | |
-| 9 | [GPIO and watchdog confidence](09-gpio-watchdog.md) | Not yet investigated | |
+| 8 | [Scope of the register documentation](08-register-documentation.md) | **Confirmed** | `993bbca` |
+| 9 | [GPIO and watchdog confidence](09-gpio-watchdog.md) | **Confirmed** | |
 | 10 | [DDR0 MMZ arithmetic](10-ddr0-mmz-arithmetic.md) | **Confirmed** | `a6ac3ed` |
-| 11 | [Ethernet DTS details](11-ethernet-dts.md) | Not yet investigated | |
+| 11 | [Ethernet DTS details](11-ethernet-dts.md) | **Confirmed** | |
 | 12 | [Internal contradictions](12-internal-contradictions.md) | **Confirmed** (all four) | `a6ac3ed` |
 | 13 | [Register-map completeness](13-register-map-completeness.md) | Not yet investigated | |
 
@@ -933,3 +933,157 @@ about exactly this.
 | `doc/14-media-codec.md` | Claim narrowed from "no public register documentation" to the specific chapters that stop short, with the table |
 | `doc/16-porting-roadmap.md` | Video capture and video output rows rewritten; out-of-scope note distinguishes "media" from "undocumented" |
 | `doc/README.md` | Finding 3 narrowed to the H.264 codec path |
+
+---
+
+## 9. GPIO and watchdog confidence — **Confirmed**
+
+Both hedges were resolvable, and resolving the GPIO one turned up an
+integration problem that would have cost a porter real time.
+
+### GPIO — the layout is PL061, the identity is not
+
+Chapter 14.5.5 gives the register map, and it is PL061 byte for byte:
+`GPIO_DATA` address-masked over `0x000`–`0x3FC`, then `DIR` `0x400`, `IS`
+`0x404`, `IBE` `0x408`, `IEV` `0x40C`, `IE` `0x410`, `RIS` `0x414`, `MIS`
+`0x418`, `IC` `0x41C`. Reset state is all-input, all-zero, edge-sensitive.
+Trigger capability is the full PL061 set. Also: GPIO18 has **six** pins, not
+eight, so the part has 150 GPIOs.
+
+**But the AMBA identification registers are not implemented.** Live reads:
+
+```
+GPIO0  +0xFE0: 31F28401 1031FBDD FF7D54C4 1C88B7F9    (a PL061 gives 61 10 04 00)
+GPIO5  +0xFE0: CDFF1303
+GPIO12 +0xFF0: FD7D4188 48047FFE 79DF2601 04406FDF    (should be 0D F0 05 B1)
+```
+
+Repeatable across reads and different between blocks, so this is undecoded-bus
+behaviour rather than a floating read. The contrast with the watchdog at
+`0x20040000`, which returns a clean `0x805` and the PrimeCell signature, shows
+the method is sound.
+
+This is decisive for the port. `gpio-pl061` is an `amba_driver` with
+`.id = 0x00041061, .mask = 0x000fffff`, and `amba_device_add()` reads those
+registers to build the ID — so `compatible = "arm,pl061", "arm,primecell"`
+alone never matches. `of_amba_device_create()` reads
+`arm,primecell-periphid` into `dev->periphid`, and `amba_device_add()` only
+calls `amba_read_periphid()` when `!dev->periphid`, so one property fixes it:
+
+```dts
+arm,primecell-periphid = <0x00041061>;
+```
+
+**Interrupts, and the complication.** IRQs 105–117, DT SPI 73–85. GPIO0–GPIO6
+get dedicated lines; above that they are paired — GPIO7/8 on 112, GPIO9/10 on
+113, GPIO11/12 on 114, GPIO13/14 on 115, GPIO15/16 on 116, GPIO17/18 on 117.
+`gpio-pl061` installs a chained parent handler
+(`girq->parent_handler = pl061_irq_handler`), which takes sole ownership of its
+parent line, so two nodes declaring the same SPI means the second displaces the
+first and one block stops delivering interrupts with no error. Nothing in a
+server build needs GPIO interrupts; the simple course is to omit `interrupts`
+from the paired nodes.
+
+### Watchdog — SP805 confirmed, plus the clock
+
+`doc/10` had already identified the SP805 from the peripheral IDs, so the
+review's "likely" was reading a stale hedge elsewhere; the live read reproduces
+it exactly. Chapter 3.8 confirms the full register set and the `0x1ACCE551`
+unlock key. IRQ 34, DT SPI 2. It is a genuine PrimeCell and needs **no**
+`periphid` override, unlike the GPIO blocks.
+
+**The counting clock had never been established, and the timeout depends on
+it.** Measured by reading `WdogValue` twice, five seconds apart:
+
+```
+0x08E91F7A -> 0x08039BB2    15,041,480 ticks / 5 s = 3.008 MHz
+```
+
+**3 MHz.** That makes `WdogLoad = 0x0ABA9500` = 180,000,000 exactly 60 seconds,
+so the vendor driver's "60 second margin" module parameter is programmed into
+the hardware rather than being only a software figure — `doc/10` previously
+said it "says nothing about the hardware timeout", which is now wrong and has
+been removed. Worth remembering that SP805 resets on the *second* expiry, so
+120 s from the last kick.
+
+**The vendor kernel re-arms it.** `doc/10` said Linux inherits a disabled
+watchdog and nothing has to service it. True at handoff, but on the running
+system `WdogControl` reads `0x3` (INTEN|RESEN) with `WdogLock` = 1. U-Boot
+disables it, then `wdt.ko` turns it back on and something kicks it. No
+consequence for a port, which boots through U-Boot, but a live takeover of the
+running system inherits an armed 60-second watchdog — the same shape of trap as
+the MCU watchdog.
+
+### Changed
+
+| File | What |
+|---|---|
+| `doc/09-gpio-pinmux-i2c.md` | GPIO section rewritten: confirmed PL061 register table, the missing AMBA identity with live evidence and the `arm,primecell-periphid` fix, a worked node, the interrupt map and the shared-line problem, GPIO18's six pins |
+| `doc/10-rtc-watchdog-misc.md` | Datasheet chapter and IRQ added; new measured-clock section; the stale "says nothing about the hardware timeout" note removed; the vendor kernel re-arming it recorded |
+| `doc/16-porting-roadmap.md` | Watchdog row gains SPI and clock; new quick-reference row for the `periphid` trap |
+
+---
+
+## 11. Ethernet device-tree details — **Confirmed**
+
+Both observations are correct: the DTS sketch contradicted its own prose on
+`phy-mode`, and `snps,dwmac-3.60a` is not an upstream-valid compatible.
+
+### Evidence
+
+**`snps,dwmac-3.60a` does not exist upstream.** `snps,dwmac.yaml` allows
+`snps,dwmac-3.40a`, `-3.50a`, `-3.610`, `-3.70a`, `-3.710`, `-3.72a`, the 4.x
+and 5.x series, and plain `snps,dwmac`. There is nothing for 3.60. `dtbs_check`
+would reject the node and no driver would match it.
+
+**The core really is 3.60**, so the gap is real rather than a typo on our side.
+The version register reads `0x00001036` on both instances — `synopsys_id` 0x36,
+user version 0x10. This does not need to be in the device tree: `stmmac` reads
+the register itself. The versioned compatibles exist to set undetectable quirks
+(`snps,dwmac-3.610` implies `enh_desc`, `bugged_jumbo`, `force_sf_dma_mode`),
+none of which has been shown to apply here.
+
+**`rgmii` is right, and the sketch's `rgmii-id` was the error** — but the more
+useful finding is that on this board the choice barely matters. Mainline's
+driver for this PHY ID has no delay support at all: only the RTL8211E entry
+(`0x001cc915`) reaches extension page 164 to program RX/TX delay. So `phy-mode`
+selects MAC-side behaviour and nothing else, and the delay has to come from
+strapping or trace length. If the link comes up with no traffic, the fix is on
+the board, not in the tree.
+
+**The PHY IDs as an RTL8211B in mainline.** `0x001cc912` is matched exactly by
+the "RTL8211B Gigabit Ethernet" entry; `0x001cc913` is the one called RTL8211C.
+The part is photographed and marked RTL8211CL, so the boot log will disagree
+with the silkscreen. A driver binds either way — this is a labelling
+curiosity, not a problem, and worth recording so nobody "fixes" it.
+
+**Which MAC is wired up, settled by live read.** With `eth0` at 1000/full and
+`eth1` down, `CRG + 0xEC` reads `0x003C003F`. The field that tracks the live
+link is the **upper** half:
+
+| Base | Kernel name | CRG+0xEC field | Value | State |
+|---|---|---|---|---|
+| `0x101C0000` | `eth1` | bits [15:0] | `0x3F` — 100 Mbps probe default, never updated | No PHY |
+| `0x101C4000` | `eth0` | bits [31:16] | `0x3C` — 1000, link, TXen, full duplex, RGMII | **Live** |
+
+So the connector is on **GMAC1**, which agrees independently with item 7's
+finding that the muxed bus is RGMII1 rather than RGMII0. It also confirms the
+CRG bit layout that had only been read out of SDK source. A glue driver's
+`fix_mac_speed` must write bits [31:16], not [15:0].
+
+### Answers to the five questions
+
+| Question | Answer |
+|---|---|
+| Which PHY mode? | `rgmii`, matching the vendor — though nothing in the path acts on the distinction |
+| Where does the delay come from? | Not the MAC and not the PHY driver. Strapping or trace length; unconfirmed, and needs underside photographs or an MDIO read |
+| Which compatible matches the version register? | None exactly. The core is 3.60 and upstream has no such string. Use `snps,dwmac` |
+| What glue is required? | A `fix_mac_speed` writing `CRG + 0xEC` bits [31:16]. Pinmux needs nothing — RGMII1 is set by U-Boot and untouched by Linux |
+| Would a new binding be needed? | Yes for the glue: `hisilicon,hi3531-gmac`, with `snps,dwmac` as the fallback so the node still probes without it |
+
+### Changed
+
+| File | What |
+|---|---|
+| `doc/06-ethernet.md` | GMAC0/GMAC1 mapping with the live CRG read; core-version section; the RTL8211B labelling note; interface-mode section rewritten around the driver's lack of delay support; DTS sketch corrected to `rgmii` and `snps,dwmac`, renamed `gmac1`, with a compatible-string discussion and an explicit unverified list; assessment sharpened |
+| `doc/16-porting-roadmap.md` | Phase 3 names GMAC1, warns off `snps,dwmac-3.60a`, notes the pinmux needs nothing; two new quick-reference rows |
