@@ -137,8 +137,32 @@ layer 4 is large enough for a 1920x1080 32bpp surface.
 The SoC also has a 2D acceleration engine (TDE, IRQ 98) with its own memory
 pools (`TDE_MEMPOOL_MMB`, coefficient buffers), driven by `hi3531_tde.ko`.
 
-U-Boot brings up graphics layers 0, 2 and 3 to draw the JPEG boot splash before
-Linux starts — see [03-boot-chain.md](03-boot-chain.md).
+### U-Boot handoff
+
+A live register read at the U-Boot prompt, before Linux changed the VOU,
+confirmed this scanout configuration:
+
+| Layer | Output channel | Address | Stride | Input/output size |
+|---|---|---|---|---|
+| G0 | DHD0 — main HD path at 1280x1024@60 | `0xC1000000` | 960 bytes | 480x300 |
+| G2 | DSD0 — first NTSC CVBS output | `0xC1000000` | 960 bytes | 480x300 |
+| G3 | DSD1 — second NTSC CVBS output | `0xC1000000` | 960 bytes | 480x300 |
+
+All three enabled layers use ARGB1555 and read the same 288,000-byte buffer;
+none scales it. The 480x300 plane is positioned within each larger output.
+U-Boot's 1280x1024 main-output mode is distinct from the vendor Linux stack's
+800x600 mode documented above.
+
+There are two valid kernel handoffs:
+
+- For a headless system, run `stopgx` for layers 0, 2 and 3, then `stopvo` for
+  devices 0, 2 and 3 before `bootm`.
+- To retain a diagnostic display, reserve the page-aligned range
+  `0xC1000000`–`0xC1046FFF` and describe one `simple-framebuffer` with width
+  480, height 300, stride 960 and format `a1r5g5b5`. It is one logical display
+  mirrored to all three outputs, with no modesetting or acceleration.
+
+See [03-boot-chain.md](03-boot-chain.md) for the boot sequence.
 
 ## Assessment
 
@@ -157,14 +181,7 @@ the transmitter is inside the SoC rather than an external bridge — there is no
 `sii902x` to fall back on. TDE and VPSS are unavailable, so acceleration and
 hardware scaling are out; a driver would be dumb-framebuffer scanout.
 
-That is a large project for a headless server, and the recommendation does not
-change. But "leave it alone because it is a server" is the reason, not "the
-hardware is undocumented".
-
-**Recommendation: leave video output alone.** Use the serial console and SSH.
-If a display is ever genuinely needed, VGA through VDP is the tractable path
-and HDMI is not.
-
-One practical note: U-Boot initialises the video output before Linux starts.
-A modern kernel that does not touch the VOU will leave whatever U-Boot drew on
-screen — the boot splash will simply stay up. That is harmless.
+For a headless server, stop the inherited output and use serial and SSH. The
+firmware framebuffer above is a low-effort diagnostic console; a native VDP
+driver is a much larger project. If one is ever justified, VGA is the tractable
+path and HDMI is not.

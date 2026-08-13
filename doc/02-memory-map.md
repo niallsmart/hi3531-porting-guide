@@ -68,8 +68,8 @@ At runtime the vendor application had allocated ~358 MB of the 791 MB across
 139 blocks with names like `vb` (video buffers), `Vdec0_Vdh`, `h264e0_Str`,
 `hifb_layer0`, `TDE_MEMPOOL_MMB`.
 
-For a server port, MMZ is simply not loaded and the whole address space becomes
-available to Linux.
+For a server port, MMZ is not loaded. All of its memory becomes available to
+Linux except any U-Boot framebuffer deliberately retained across handoff.
 
 ## Reclaiming the memory
 
@@ -91,6 +91,11 @@ memory@80000000 {
           <0xc0000000 0x20000000>;   /* DDR1: 512 MB — confirmed */
 };
 ```
+
+Before DDR1 enters the page allocator, resolve U-Boot's active framebuffer:
+stop the inherited VOU pipelines for a headless system, or reserve
+`0xC1000000`–`0xC1046FFF` and expose it as a `simple-framebuffer`. See
+[the measured handoff configuration](12-video-output.md#u-boot-handoff).
 
 > **This node only survives if `CONFIG_ARM_ATAG_DTB_COMPAT` is off.** With it on,
 > the decompressor overwrites `/memory` with U-Boot's `ATAG_MEM` — one bank of

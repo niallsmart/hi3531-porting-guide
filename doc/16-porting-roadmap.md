@@ -70,6 +70,10 @@ interrupts and console all work.
 Describe both DRAM banks in the device tree, drop `mem=224M`, and **set
 `CONFIG_VMSPLIT_2G`**. This should take the machine from 224 MB to around 1 GB.
 
+Before exposing DDR1 to the page allocator, either stop U-Boot's VOU pipelines
+or reserve and inherit its framebuffer. The measured configuration and both
+handoff choices are in [12-video-output.md](12-video-output.md#u-boot-handoff).
+
 DDR1 lies outside a default 3G/1G kernel's low-memory window.
 `CONFIG_HIGHMEM` is the alternative; see
 [making both banks usable](02-memory-map.md#making-both-banks-usable).
@@ -102,24 +106,25 @@ filesystem. At this point the machine is a usable server.
 
 ## Phase 5 — Optional extras
 
-In rough order of value:
+In descending order of value, then ascending effort:
 
-| Item | Effort | Notes |
-|---|---|---|
-| **The second CPU** | Low–medium | ~30 lines of `smp_operations`: enable the SCU, write `__pa_symbol(secondary_startup)` to `SYS_CTRL + 0x134`. No reset or IPI needed — U-Boot leaves CPU1 running and polling. Also enable `ARM_ERRATA_764369` and `775420` for A9 r3p0 SMP. [Detail](01-soc-overview.md#secondary-cpu-startup) |
-| Watchdog | Low | Confirmed ARM SP805, a genuine PrimeCell — `arm,sp805`, SPI 2, and a 3 MHz clock (measured) |
-| USB | Low–medium | Standard EHCI/OHCI, needs PHY glue |
-| RTC | Low | On-chip PL031 (`arm,pl031`) is trivial but has no battery. Battery-backed external chip needs `i2c-gpio` + `rtc-ds1307`; pins are known |
-| SD/MMC | Medium | `dw_mmc` may fit; socket may not exist. Its pins are function 4 of the `VIU3` run, so it excludes the fourth video input |
-| Hardware SPI | Low | An ARM **PL022** at `0x200C0000`, SPI 12 — `spi-pl022` binds with no override. The board bit-bangs instead, so the pins need muxing to function 1 |
-| Spare timers | Low | Four SP804 blocks, not two. Timers 1–3 at `0x20010000`, `0x20130000`, `0x20140000` are unused: six spare 32-bit timers |
-| DMA | Medium | An ARM **PL080** at `0x100D0000`, but its periphid collides with mainline's Samsung PL080S entry — read the warning before enabling |
-| L2 cache | Medium | Forward-port the vendor `cache-hil2v200.c`; performance only, boots without it |
-| Front panel, buzzer, alarm relays | Low–medium | All behind the AT89S52 on `ttyAMA1`. Protocol fully recovered and verified on the wire — userspace serial, no kernel driver needed |
-| Audio | High | Needs an ASoC platform driver written from scratch |
-| Video output | Very high | VDP (the scanout block) is documented, so dumb-framebuffer VGA is possible. The on-chip HDMI transmitter is not documented, and TDE/VPSS are not, so no acceleration and no HDMI. 800x600 is the vendor's mode, not a limit — the SoC does 2560x1600 on VGA |
-| Video capture | Impractical | VICAP itself is fully documented; the analogue decoder and FPGA feeding it are not. See [11-video-input.md](11-video-input.md) |
-| H.264 codec | Impossible | See [14-media-codec.md](14-media-codec.md) |
+| Item | Value | Effort | Notes |
+|---|---|---|---|
+| Watchdog | High | Low | Confirmed ARM SP805, a genuine PrimeCell — `arm,sp805`, SPI 2, and a 3 MHz clock (measured) |
+| The second CPU | High | Low–medium | ~30 lines of `smp_operations`: enable the SCU, write `__pa_symbol(secondary_startup)` to `SYS_CTRL + 0x134`. No reset or IPI needed — U-Boot leaves CPU1 running and polling. Also enable `ARM_ERRATA_764369` and `775420` for A9 r3p0 SMP. [Detail](01-soc-overview.md#secondary-cpu-startup) |
+| USB | High | Low–medium | Standard EHCI/OHCI, needs PHY glue |
+| Front panel, buzzer, alarm relays | High | Low–medium | All behind the AT89S52 on `ttyAMA1`. Protocol fully recovered and verified on the wire — userspace serial, no kernel driver needed |
+| RTC | Medium | Low | On-chip PL031 (`arm,pl031`) is trivial but has no battery. Battery-backed external chip needs `i2c-gpio` + `rtc-ds1307`; pins are known |
+| L2 cache | Medium | Medium | Forward-port the vendor `cache-hil2v200.c`; performance only, boots without it |
+| Hardware SPI | Low | Low | An ARM PL022 at `0x200C0000`, SPI 12 — `spi-pl022` binds with no override. The board bit-bangs instead, so the pins need muxing to function 1 |
+| Spare timers | Low | Low | Four SP804 blocks, not two. Timers 1–3 at `0x20010000`, `0x20130000`, `0x20140000` are unused: six spare 32-bit timers |
+| Inherited firmware framebuffer | Low | Low | U-Boot leaves one 480x300 ARGB1555 buffer mirrored to its main HD path and both CVBS outputs; reserve it and use `simple-framebuffer` for a fixed diagnostic display |
+| SD/MMC | Low | Medium | `dw_mmc` may fit; socket may not exist. Its pins are function 4 of the `VIU3` run, so it excludes the fourth video input |
+| DMA | Low | Medium | An ARM PL080 at `0x100D0000`, but its periphid collides with mainline's Samsung PL080S entry — read the warning before enabling |
+| Audio | Low | High | Needs an ASoC platform driver written from scratch |
+| Native video output | Low | Very high | VDP is documented, so a VGA DRM/KMS driver is possible. The on-chip HDMI transmitter and TDE/VPSS are not documented. 800x600 is the vendor Linux mode, not a hardware limit |
+| Video capture | Low | Impractical | VICAP itself is fully documented; the analogue decoder and FPGA feeding it are not. See [11-video-input.md](11-video-input.md) |
+| H.264 codec | Low | Impossible | See [14-media-codec.md](14-media-codec.md) |
 
 ## Open questions
 

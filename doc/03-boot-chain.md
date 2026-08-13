@@ -147,7 +147,7 @@ judge ddr init
 user init finish.
 ```
 
-Two things worth noting for a port:
+Three things worth noting for a port:
 
 1. **U-Boot disables the watchdog** (`dog_close`) before booting. If you replace
    the bootloader, make sure the watchdog is either disabled or serviced, or the
@@ -157,6 +157,9 @@ Two things worth noting for a port:
    reflash the device from USB or disk. This is a hazard: an unexpected update
    image on an attached volume could overwrite your work. Understand it before
    leaving media attached.
+3. **The VOU remains active at kernel entry.** Before reclaiming DDR1, either
+   stop its three output pipelines or retain its buffer as a firmware
+   framebuffer. See [12-video-output.md](12-video-output.md#u-boot-handoff).
 
 ## Interrupting the bootloader
 
