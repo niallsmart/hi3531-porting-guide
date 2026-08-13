@@ -78,6 +78,34 @@ in [18-reference-assets.md](18-reference-assets.md).
 Reverse by deleting the files. Nothing was installed system-wide and no service
 was created.
 
+## Changes made (2026-08-13)
+
+### Serial console logging with `cat`
+
+The watchdog work needed the DVR console captured across resets, which
+`picocom` cannot do unattended. No package was installed; `cat` was used
+directly:
+
+```sh
+stty -F /dev/serial0 115200 raw -echo
+setsid nohup cat /dev/serial0 > /tmp/wd.log 2>/dev/null < /dev/null &
+```
+
+This is worth reusing. It survives the ssh session ending, and because each
+`read()` is written straight through there is no buffering to lose the last
+seconds before a reset — which matters when the event you are trying to catch
+*is* the reset. Stop it with `pkill -f 'cat /dev/serial0'`.
+
+**Both loggers were stopped at the end of the session.** Two log files remain:
+
+| File | Contents |
+|---|---|
+| `/tmp/wd.log` | The MCU watchdog reset — kicks stopped with `SIGSTOP`, 60-second timeout, U-Boot banner |
+| `/tmp/wd2.log` | The `SIGTERM` reset and the subsequent clean `reboot` |
+
+Both are in `/tmp` and will not survive a reboot of the Pi. Nothing else was
+changed; no packages, services or configuration files were touched.
+
 ## Untouched
 
 - Network configuration, firewall, and `systemd` units.
