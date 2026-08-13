@@ -27,7 +27,10 @@ CPU, memory and UART are equally conventional.
 
 1. **~790 MB of RAM is reserved for the video pipeline.** Not loading
    HiSilicon's MMZ allocator takes the machine from 224 MB to roughly 1 GB.
-   This is the single biggest win available.
+   This is the single biggest win available — though the upper bank needs
+   `CONFIG_VMSPLIT_2G` to be reachable at all, and
+   `CONFIG_ARM_ATAG_DTB_COMPAT` will quietly undo the whole thing. See
+   [02-memory-map.md](02-memory-map.md#making-both-banks-usable).
 2. **Neither flash controller has a mainline driver**, but this does not block
    anything — loading a modern kernel over TFTP with the existing vendor U-Boot
    and putting the root filesystem on the SATA disk sidesteps both, satisfies

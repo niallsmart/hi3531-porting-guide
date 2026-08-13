@@ -8,8 +8,11 @@ carved out for HiSilicon's Media Memory Zone (MMZ) allocator, which serves the
 video pipeline.
 
 **Recovering that memory is the single largest win in repurposing this board as
-a general-purpose server.** It requires nothing more than changing the kernel
-command line and not loading the MMZ driver.
+a general-purpose server.** No new drivers are needed — MMZ simply is not
+loaded. But it is not a one-line change either: the second bank sits at
+`0xC0000000`, beyond what a default 3G/1G kernel can map as low memory, so the
+kernel configuration has to be chosen for it. See
+[making both banks usable](#making-both-banks-usable).
 
 ## Physical layout
 
@@ -144,6 +147,93 @@ Two further notes:
    `gd->bd->bi_dram[0]` from constants). A port that keeps the existing U-Boot
    does not need to touch this; a port that replaces the bootloader does, and
    the register table would have to be extracted from the SPI-NOR image.
+
+## Making both banks usable
+
+Two `reg` entries describe the memory. They do not, on their own, make it
+reachable. On 32-bit ARM the low-memory linear map starts at `PHYS_OFFSET` and
+runs for a fixed span, and **`0xC0000000` is outside that span under the default
+3G/1G split** — so a kernel that is otherwise correct will boot with 512 MB and
+print a notice about the rest.
+
+### Why the second bank falls outside
+
+`adjust_lowmem_bounds()` in `arch/arm/mm/mmu.c` computes the physical ceiling of
+low memory as
+
+```
+vmalloc_limit = VMALLOC_END − vmalloc_size − VMALLOC_OFFSET − PAGE_OFFSET + PHYS_OFFSET
+```
+
+with `VMALLOC_END` = `0xFF800000`, `VMALLOC_OFFSET` = 8 MB and `vmalloc_size`
+defaulting to 240 MB. `PHYS_OFFSET` is `0x80000000` here. That gives:
+
+| Split | `PAGE_OFFSET` | Low-memory window, physical | DDR0 | DDR1 |
+|---|---|---|---|---|
+| `VMSPLIT_3G` (default) | `0xC0000000` | `0x80000000`–`0xAFFFFFFF` (768 MB) | Low | **High** |
+| `VMSPLIT_3G_OPT` | `0xB0000000` | `0x80000000`–`0xBFFFFFFF` (1024 MB) | Low | **High** — the window ends exactly where DDR1 begins |
+| `VMSPLIT_2G` | `0x80000000` | `0x80000000`–`0xEFFFFFFF` (1792 MB) | Low | **Low** |
+
+Shrinking the vmalloc reservation does not rescue the 3G split: even at the
+16 MB floor the window only reaches `0xBE000000`, still short of `0xC0000000`.
+`VMSPLIT_3G_OPT` is a particular trap — its help text offers "full 1G low
+memory", and the 1 GB it grants stops one byte below the bank you want.
+
+### What happens if you get it wrong
+
+`adjust_lowmem_bounds()` ends with:
+
+```c
+if (!IS_ENABLED(CONFIG_HIGHMEM) || cache_is_vipt_aliasing()) {
+        if (memblock_end_of_DRAM() > arm_lowmem_limit) {
+                ...
+                pr_notice("Ignoring RAM at %pa-%pa\n", &memblock_limit, &end);
+                pr_notice("Consider using a HIGHMEM enabled kernel.\n");
+                memblock_remove(memblock_limit, end - memblock_limit);
+```
+
+So a 3G-split kernel without `CONFIG_HIGHMEM` discards DDR1 outright and says
+so. **If a port reports ~512 MB, search the boot log for `Ignoring RAM`** — that
+is this, and not a device-tree mistake.
+
+### Two ways to get all of it
+
+| Approach | Config | Trade-off |
+|---|---|---|
+| **`CONFIG_VMSPLIT_2G`** | `PAGE_OFFSET` becomes `0x80000000` | Both banks become low memory, no highmem machinery at all. User address space drops from 3 GB to 2 GB — irrelevant on a 1 GB machine. **Recommended** |
+| `CONFIG_HIGHMEM` with the 3G split | Keep `PAGE_OFFSET` at `0xC0000000` | Works, and keeps 3 GB of user space, but every kernel access to DDR1 goes through `kmap`, and kernel allocations stay confined to DDR0 |
+
+Either gives the full ~1 GB. The 2G split is simpler and faster; nothing about
+this workload needs 3 GB of user virtual address space.
+
+### The hole
+
+The 512 MB gap at `0xA0000000`–`0xBFFFFFFF` needs no special handling. Both
+banks and the gap are 256 MB-aligned, which is exactly ARM's
+`SECTION_SIZE_BITS` of 28, so `CONFIG_SPARSEMEM` represents the layout without
+waste — and `ARCH_SPARSEMEM_ENABLE` is `def_bool !ARCH_FOOTBRIDGE`, so it is
+available here. `CONFIG_FLATMEM` also works, at the cost of a few megabytes of
+`struct page` covering pages that do not exist. The vendor kernel uses FLATMEM,
+but it only ever saw one bank.
+
+No memblock or zone precautions are needed beyond the two `reg` entries. The
+linear map is built per memblock region, so the gap simply has no page tables.
+
+### DMA
+
+No restriction applies. ARM creates `ZONE_DMA` only when the machine descriptor
+sets `dma_zone_size`; with it unset, `setup_dma_zone()` leaves `arm_dma_limit`
+at `0xFFFFFFFF` and every address is DMA-able. A DT-only platform sets nothing,
+so this is the default.
+
+The hardware side is partly evidenced rather than proven: the vendor firmware
+runs 504 MB of MMZ video buffers in DDR1 at `0xC0000000`, so the media engines
+demonstrably master to that range. The same has not been shown for AHCI,
+`stmmac` or EHCI, which never see those addresses under the vendor
+configuration. All three are 32-bit AXI masters on the same interconnect and
+there is no reason to expect trouble, but if `CONFIG_HIGHMEM` is used rather
+than the 2G split, DMA to and from DDR1 becomes routine and is worth watching
+during Phase 4.
 
 ## Kernel virtual layout (vendor kernel, for reference)
 

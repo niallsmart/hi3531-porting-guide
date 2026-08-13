@@ -14,8 +14,8 @@ than only the cited example; the "Changed" row lists them all.
 | 1 | [U-Boot SATA loading](01-uboot-sata-loading.md) | **Confirmed** | `5835778` |
 | 2 | [Device-tree interrupt numbers](02-device-tree-interrupts.md) | **Confirmed** | `0b2bdad` |
 | 3 | [SP804 timer topology](03-sp804-timer-topology.md) | **Confirmed** | `c17240e` |
-| 4 | [Device-tree handoff from U-Boot](04-device-tree-handoff.md) | **Confirmed** | |
-| 5 | [Access to the upper DRAM bank](05-upper-dram-bank.md) | Not yet investigated | |
+| 4 | [Device-tree handoff from U-Boot](04-device-tree-handoff.md) | **Confirmed** | `296668b` |
+| 5 | [Access to the upper DRAM bank](05-upper-dram-bank.md) | **Confirmed** | |
 | 6 | [Secondary CPU startup](06-secondary-cpu-startup.md) | Not yet investigated | |
 | 7 | [Pinmux provenance and completeness](07-pinmux-map.md) | Not yet investigated | |
 | 8 | [Scope of the register documentation](08-register-documentation.md) | Not yet investigated | |
@@ -503,3 +503,88 @@ a DT kernel matches on the root node's `compatible` and ignores it.
 
 The `mkimage` recipe and the `0x82000000` load address are marked untested —
 nothing here has booted a mainline kernel, and that remains Phase 1's job.
+
+---
+
+## 5. Access to the upper DRAM bank — **Confirmed**
+
+The premises are all correct — the vendor `godnet_defconfig` has
+`CONFIG_VMSPLIT_3G=y`, `CONFIG_PAGE_OFFSET=0xC0000000`, `CONFIG_HIGHMEM` unset,
+`CONFIG_FLATMEM=y` — and the concern behind them is real. **Two `reg` entries
+are not enough.** A kernel that is otherwise correct will boot with 512 MB.
+
+### The arithmetic
+
+`adjust_lowmem_bounds()` in `arch/arm/mm/mmu.c` sets the physical ceiling of low
+memory to
+
+```
+vmalloc_limit = VMALLOC_END − vmalloc_size − VMALLOC_OFFSET − PAGE_OFFSET + PHYS_OFFSET
+```
+
+`VMALLOC_END` is `0xFF800000` (`arch/arm/include/asm/pgtable.h`),
+`VMALLOC_OFFSET` is 8 MB, `vmalloc_size` defaults to 240 MB, and `PHYS_OFFSET`
+is `0x80000000` on this board:
+
+| Split | `PAGE_OFFSET` | Low-memory window | DDR0 | DDR1 |
+|---|---|---|---|---|
+| `VMSPLIT_3G` | `0xC0000000` | `0x80000000`–`0xAFFFFFFF` (768 MB) | Low | **High** |
+| `VMSPLIT_3G_OPT` | `0xB0000000` | `0x80000000`–`0xBFFFFFFF` (1024 MB) | Low | **High** |
+| `VMSPLIT_2G` | `0x80000000` | `0x80000000`–`0xEFFFFFFF` (1792 MB) | Low | Low |
+
+`VMSPLIT_3G_OPT` deserves a warning of its own: its help text advertises "full
+1G low memory", and the 1 GB window it produces ends at `0xC0000000` — the exact
+address DDR1 starts at, so it captures none of it. Shrinking vmalloc does not
+save the 3G split either; at the 16 MB floor the window reaches only
+`0xBE000000`.
+
+### Answers to the specific questions
+
+**How much can be low memory?** Under the 3G split, DDR0's 512 MB and none of
+DDR1. Under the 2G split, all 1 GB.
+
+**Is `CONFIG_HIGHMEM` required?** Under the 3G split, yes — and without it the
+kernel does not fail, it discards the bank:
+
+```c
+if (!IS_ENABLED(CONFIG_HIGHMEM) || cache_is_vipt_aliasing()) {
+        if (memblock_end_of_DRAM() > arm_lowmem_limit) {
+                pr_notice("Ignoring RAM at %pa-%pa\n", &memblock_limit, &end);
+                pr_notice("Consider using a HIGHMEM enabled kernel.\n");
+                memblock_remove(memblock_limit, end - memblock_limit);
+```
+
+Under `VMSPLIT_2G`, `HIGHMEM` is not required at all. That is the better answer
+here: no `kmap` on the hot paths, kernel allocations free to use either bank,
+and the only cost is user address space falling from 3 GB to 2 GB, which no
+workload on a 1 GB machine will notice.
+
+**Can any device not address the upper bank?** Nothing indicates so. ARM creates
+`ZONE_DMA` only when a machine descriptor sets `dma_zone_size`; with it unset —
+which is what a DT-only platform does — `setup_dma_zone()` leaves
+`arm_dma_limit` at `0xFFFFFFFF`. On the hardware side the evidence is partial
+but favourable: the vendor firmware runs 504 MB of MMZ video buffers at
+`0xC0000000`, so the media engines master to that range. AHCI, `stmmac` and EHCI
+have not been shown to, only because they never see those addresses under the
+vendor configuration. Recorded as a thing to watch in Phase 4 rather than a
+known problem.
+
+**Does the hole need extra precautions?** No. The linear map is built per
+memblock region, so the gap simply gets no page tables. Both banks and the
+512 MB gap are 256 MB-aligned, exactly ARM's `SECTION_SIZE_BITS` of 28, so
+`CONFIG_SPARSEMEM` fits the layout with no waste — and `ARCH_SPARSEMEM_ENABLE`
+is `def_bool !ARCH_FOOTBRIDGE`, so it is available. `FLATMEM` also works, paying
+a few MB of `struct page` for pages that do not exist.
+
+**Should the "nothing more than" claim be qualified?** Yes, and it has been. No
+new drivers are needed, which was the point being made, but the kernel
+configuration is not incidental: `VMSPLIT_2G` to reach the bank and
+`ARM_ATAG_DTB_COMPAT=n` (item 4) to keep the device tree's own memory node.
+
+### Changed
+
+| File | What |
+|---|---|
+| `doc/02-memory-map.md` | Summary claim qualified; new "Making both banks usable" section — the `vmalloc_limit` arithmetic and per-split table, the `Ignoring RAM` failure mode, `VMSPLIT_2G` vs `HIGHMEM`, the hole and memory model, and DMA |
+| `doc/16-porting-roadmap.md` | Phase 2 now requires `VMSPLIT_2G` and tabulates the two failure modes by what the kernel reports; quick-reference row; risks-table entry |
+| `doc/README.md` | Finding 1 notes both configuration traps |

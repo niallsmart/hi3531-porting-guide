@@ -90,14 +90,21 @@ is tabulated in
 
 ## Phase 2 — Reclaim the memory
 
-Describe both DRAM banks in the device tree and drop `mem=224M`. This should
-take the machine from 224 MB to around 1 GB. Verify the upper bound of each
-bank empirically — see the warning in [02-memory-map.md](02-memory-map.md).
+Describe both DRAM banks in the device tree, drop `mem=224M`, and **set
+`CONFIG_VMSPLIT_2G`**. This should take the machine from 224 MB to around 1 GB.
 
-If the kernel still reports 224 MB after this, the cause is almost certainly
-`CONFIG_ARM_ATAG_DTB_COMPAT` being enabled: it overwrites the `/memory` node
-with U-Boot's single 256 MB `ATAG_MEM` and applies the vendor `bootargs` with
-`mem=224M`. Phase 1 step 4 turns it off for exactly this reason.
+The 2G split is not optional decoration. DDR1 at `0xC0000000` lies outside the
+low-memory window of a default 3G/1G kernel, which will discard it and log
+`Ignoring RAM`. `CONFIG_HIGHMEM` is the alternative; the 2G split is simpler and
+costs nothing that matters here. See
+[making both banks usable](02-memory-map.md#making-both-banks-usable).
+
+Two failure modes to recognise if the memory does not appear:
+
+| Kernel reports | Cause |
+|---|---|
+| 224 MB | `CONFIG_ARM_ATAG_DTB_COMPAT` is enabled — it overwrites `/memory` with U-Boot's single 256 MB `ATAG_MEM` and applies the vendor `mem=224M`. Phase 1 step 4 turns it off |
+| ~512 MB, with `Ignoring RAM` in the log | 3G split without `CONFIG_HIGHMEM`; DDR1 was dropped |
 
 ## Phase 3 — Ethernet
 
@@ -168,6 +175,7 @@ Where the answers to the most commonly needed questions live.
 | Question | Answer | Detail in |
 |---|---|---|
 | How much RAM, and where? | 512 MB at `0x80000000`, 512 MB at `0xC0000000` | [02-memory-map.md](02-memory-map.md) |
+| Why is only half the RAM showing? | DDR1 is outside a 3G-split kernel's low-memory window — use `VMSPLIT_2G` | [02-memory-map.md](02-memory-map.md#making-both-banks-usable) |
 | Device-tree interrupt numbers? | SPI = `/proc/interrupts` number − 32 | [01-soc-overview.md](01-soc-overview.md) |
 | Ethernet `phy-mode`? | Plain `rgmii`, plus the CRG+0xEC bit layout | [06-ethernet.md](06-ethernet.md) |
 | Where is the MAC address? | `/etc/init.d/mac.dat`; factory master at SPI-NOR `0xBFC20` | [04-flash-storage.md](04-flash-storage.md) |
@@ -201,3 +209,4 @@ proprietary media pipeline, and the auto-update mechanism's image format.
 | A bad flash write bricks the board | Do not write flash until a programmer is on hand; backups exist in `backups/2026-08-03/` |
 | SATA PHY init missing, disk never appears | Extract the sequence from the SDK kernel sources |
 | `ARM_ATAG_DTB_COMPAT` silently caps the machine at 224 MB | Leave it off. It overwrites the DT `/memory` node with U-Boot's fabricated single 256 MB bank and applies the vendor `mem=224M` — see [03-boot-chain.md](03-boot-chain.md#leave-arm_atag_dtb_compat-off-or-lose-three-quarters-of-the-ram) |
+| A correct device tree still yields only 512 MB | DDR1 is above the 3G-split low-memory ceiling and gets discarded. Use `VMSPLIT_2G`, or `HIGHMEM` — see [02-memory-map.md](02-memory-map.md#making-both-banks-usable) |
