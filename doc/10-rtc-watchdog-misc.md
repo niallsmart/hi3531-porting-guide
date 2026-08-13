@@ -308,6 +308,12 @@ directly beside the MCU on the board, which fits. The buzzer (BZ1) is on the
 same path, as command 5 — `A0 05 01 00 A6` sounds it and `A0 05 00 00 A5`
 silences it.
 
+There is a second, misleading trail worth knowing about. `rootfs/mtd/dep2.sh`
+writes `0x200f004c` under the comment `#set default buzzer gpio control`,
+which reads as though GPIO2_3 drives the buzzer. The value it writes is 0,
+which is `VIU1_CLK` — the write takes that pin out of GPIO mode. Nothing on
+this board sounds the buzzer through a SoC GPIO.
+
 Reading the inputs is not a wire transaction. The MCU broadcasts their state
 twice a second unprompted, and `alarm_status_get` returns what the library's
 reader thread last cached — see

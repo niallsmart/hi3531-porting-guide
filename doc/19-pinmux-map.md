@@ -131,8 +131,16 @@ Reading across it:
   captures, so `I2C_SDA`/`I2C_SCL` are never routed to the hardware controller.
 - **UART2 is switched on by Linux, not U-Boot** — `0x004` and `0x050` to
   function 2. That is the rear-panel RS485 port.
-- **The buzzer pin `0x04c` is GPIO2_3 in U-Boot and reverts to `VIU1_CLK` under
-  Linux**, because the 4HD script leaves the line commented out.
+- **`0x04c` is not a buzzer pin on this board**, despite the vendor calling it
+  one. `rootfs/mtd/dep2.sh` writes 0 to it under the comment
+  `#set default buzzer gpio control`, and 0 is `VIU1_CLK` — the write takes the
+  pin *out* of GPIO mode. U-Boot leaves it at 1 (`GPIO2_3`); every pinctrl
+  variant that would also set 1 has the line commented out. Under Linux it
+  reads 0 and is the VIU1 clock. The buzzer BZ1 is driven by the AT89S52
+  microcontroller over `ttyAMA1`, observed on the wire — see
+  [20-front-panel-mcu.md](20-front-panel-mcu.md). Whether GPIO2_3 is physically
+  wired to anything on this board is unknown; the vendor comment is the only
+  suggestion that it is, and the vendor disables it.
 - `0x138` and `0x13c` (`SIO0_RCLK`, `SIO0_RFS`) read 0 under Linux even though
   the 4HD script writes 1 to both. Something after the script clears them;
   `SIO0_DIN` at `0x140` stays at 1.

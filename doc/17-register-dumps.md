@@ -76,7 +76,7 @@ running kernel has:
 | Offset | Value | Selected function |
 |---|---|---|
 | `+0x000`–`+0x0E0` | 0 | VIU0 / VIU1 / VIU2 video input buses |
-| `+0x04C` | 1 | GPIO2_3 — buzzer control |
+| `+0x04C` | 1 | `GPIO2_3` — but Linux writes 0, making it `VIU1_CLK`. Not the buzzer, despite the vendor comment; see [19-pinmux-map.md](19-pinmux-map.md#what-this-board-selects) |
 | `+0x0E4`, `+0x0E8` | 1 | `VGA_HS`, `VGA_VS` |
 | `+0x0EC`–`+0x134` | 3 | `VOU1120` — the BT.1120 video *output* bus, 19 pins |
 | `+0x138`–`+0x1A8` | 0 | GPIO: the audio SIO ports, hardware SPI, hardware I²C and UART1 alternates are all deselected |
