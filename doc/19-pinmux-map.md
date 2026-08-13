@@ -25,10 +25,13 @@ It covers **151 registers, `0x000` through `0x258`, with no gaps.**
 
 The vendor's `rootfs/mtd/modules/pinctrl_*_hi3531.sh` scripts carry the same
 information as trailing comments, and an earlier version of this document was
-built from them. **Do not use the script comments as the function map.** Their
-GPIO labels are shifted against the datasheet across three long runs — 56 of the
-108 registers they cover had the wrong GPIO number here as a result. The scripts
-remain the authority for one thing only: which *value* the vendor writes.
+built from them. Their **peripheral names are reliable** — every signal name in
+the function columns survived the comparison unchanged. Their **GPIO numbers
+are not**: they run three too high across the VIU0 block and three too low
+across the VIU2 block, giving 37 wrong GPIO labels in the 108 registers the
+scripts cover. Two more registers, the VGA pair at `0x0e4`/`0x0e8`, had their
+values transposed. The scripts remain the authority for one thing: which
+*value* the vendor writes.
 
 The "This board" column below is better evidence than either, being read from
 the running device.

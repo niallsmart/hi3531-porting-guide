@@ -17,7 +17,7 @@ than only the cited example; the "Changed" row lists them all.
 | 4 | [Device-tree handoff from U-Boot](04-device-tree-handoff.md) | **Confirmed** | `296668b` |
 | 5 | [Access to the upper DRAM bank](05-upper-dram-bank.md) | **Confirmed** | `6193589` |
 | 6 | [Secondary CPU startup](06-secondary-cpu-startup.md) | **Confirmed** | `1c7094d` |
-| 7 | [Pinmux provenance and completeness](07-pinmux-map.md) | **Confirmed** | |
+| 7 | [Pinmux provenance and completeness](07-pinmux-map.md) | **Confirmed** | `7723da3` |
 | 8 | [Scope of the register documentation](08-register-documentation.md) | Not yet investigated | |
 | 9 | [GPIO and watchdog confidence](09-gpio-watchdog.md) | Not yet investigated | |
 | 10 | [DDR0 MMZ arithmetic](10-ddr0-mmz-arithmetic.md) | **Confirmed** | `a6ac3ed` |
@@ -740,15 +740,30 @@ muxctrl_reg103 is the multiplexing control register for the I2C_SCL pin.
 -layout` and parsed; all 151 blocks yielded an offset, a pin name, a field width
 and a complete value list.
 
-**Diffing the datasheet against the old table: 65 wrong cells across 56 of the
-108 registers it covered.** The GPIO labels are shifted in three runs:
+**Diffing the datasheet against the old table: 41 wrong cells across 39 of the
+108 registers it covered** — all of them GPIO labels, except two registers where
+the values were transposed:
 
-| Range | Registers | Error |
+| Range | Cells | Error |
 |---|---|---|
-| `0x000`–`0x048` | VIU0 block, 18 of 19 | Doc's GPIO number 3 too high. `0x008` was right by coincidence |
-| `0x098`–`0x0e0` | VIU2 block, 18 of 19 | Doc's GPIO number 3 too low. `0x0a0` was right by coincidence |
-| `0x0e4`, `0x0e8` | VGA | Values transposed — 0 is `GPIO7_1`/`GPIO7_2`, 1 is `VGA_HS`/`VGA_VS` |
-| `0x19c` | I²C SCL | `GPIO12_5`, not `GPIO12_4` |
+| `0x000`–`0x048` | 18 | VIU0 block: GPIO number 3 too high. 18 of 19 rows — `0x008` was right by coincidence |
+| `0x098`–`0x0e0` | 18 | VIU2 block: GPIO number 3 too low. 18 of 19 rows — `0x0a0` was right by coincidence |
+| `0x0e4`, `0x0e8` | 4 | VGA: values transposed — 0 is `GPIO7_1`/`GPIO7_2`, 1 is `VGA_HS`/`VGA_VS` |
+| `0x19c` | 1 | I²C SCL: `GPIO12_5`, not `GPIO12_4` |
+
+**No peripheral name was wrong.** Every signal in the function columns —
+`VIU0_DAT7`, `UART2_TXD`, `SPI_CSN0`, `SIO4_DOUT` and the rest — matched the
+datasheet, as did every value the vendor script writes. Two further classes of
+difference turned up in the diff and are not errors: 80 cells where the scripts
+abbreviate `VOU0_DATA7` to `VOU0_DAT7`, and 8 cells where the script comment
+literally reads `SDIOxx` because the vendor did not bother naming the SDIO
+alternates.
+
+So the old table was wrong in a narrow way. The GPIO alternates it got wrong
+are on video-bus pins, none of which this board uses as GPIO — which is why the
+error survived: nothing depended on it. The substantive gaps were the 43 missing
+registers and the U-Boot-versus-Linux confusion below, not the accuracy of what
+was there.
 
 The two coincidences are what produced the duplicate labels the old document
 warned about: `GPIO2_3` appeared at both `0x040` and `0x04c` because `0x040`
@@ -779,8 +794,8 @@ it were the operating configuration.
 
 ### Answers to the four questions
 
-**Can every row be reconciled against the datasheet?** Yes, all 151 — and 56 of
-the 108 previously documented needed correcting.
+**Can every row be reconciled against the datasheet?** Yes, all 151. Of the 108
+previously documented, 39 needed a correction and all 39 were GPIO labels.
 
 **Should the scripts be used only for the selected values?** Yes, and that is
 now what they are used for. Better still, the live Linux capture supersedes them
