@@ -76,7 +76,7 @@ CPU, memory and UART are equally conventional.
 | 16 | [Porting Roadmap and Open Questions](16-porting-roadmap.md) | Phased plan, resolved and open questions, risks |
 | 17 | [Live Register Dumps](17-register-dumps.md) | Pinmux, CRG, SYS_CTRL and DDR controller dumps from the running board |
 | 18 | [Reference Assets and Capture Methods](18-reference-assets.md) | SDK layout, SDK verification, live access, pitfalls |
-| 19 | [Pin Multiplexing Map](19-pinmux-map.md) | All 108 IO_CONFIG registers with their function tables |
+| 19 | [Pin Multiplexing Map](19-pinmux-map.md) | All 151 IO_CONFIG registers from the chip datasheet, with what this board selects |
 | — | [Raspberry Pi Configuration Log](raspberrypi-changes.md) | Changes made to the serial-proxy host |
 
 ## Where to start
@@ -102,7 +102,7 @@ The remaining gaps, in order of impact:
 | Gap | Effect |
 |---|---|
 | **Only the top PCB surface is photographed** | SPI-NOR, NAND, RTC and regulators are unlocated on the board. |
-| **The SDK's board documentation is for HiSilicon's demo board** | Board-level detail comes from the device itself — chiefly the vendor `pinctrl_*.sh` scripts. A TVT GPL source release would corroborate it. |
+| **The SDK's board documentation is for HiSilicon's demo board** | Board-level detail comes from the device itself — live register reads and the vendor `pinctrl_*.sh` scripts. A TVT GPL source release would corroborate it. Chip-level detail does not have this problem: the SDK ships the full 1794-page Hi3531 datasheet. |
 | **`U16` is unidentified** | A 56-pin TI part beside the VGA/HDMI connectors. Not on any path a server build depends on. |
 | **No NVP1104B datasheet** | Only affects the video capture path, which is out of scope anyway. |
 
@@ -111,8 +111,9 @@ pointing to the answers most often needed.
 
 `PLAN.md` constraints observed throughout: **nothing was written to SPI or
 NAND.** The device was rebooted twice, with permission, to capture U-Boot state.
-Register reads were done from U-Boot's read-only `md` rather than the Linux
-`himm` tool, which prompts for a write after every read.
+Register reads were done from U-Boot's read-only `md` and from `devmem` under
+Linux — never from the vendor `himm` tool, which prompts for a write after
+every read.
 
 Full detail on gaps and next steps is in
 [Porting Roadmap and Open Questions](16-porting-roadmap.md).

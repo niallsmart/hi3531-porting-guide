@@ -32,6 +32,11 @@ spin-up) is set, which disables parallel bus scan.
 | `ata1` | `mmio 0x10080000 port 0x100` | SATA link down — nothing connected |
 | `ata2` | `mmio 0x10080000 port 0x180` | SATA link up, 1.5 Gbps |
 
+The SoC has two dedicated activity-LED outputs, `SATA_LED_N0` and `SATA_LED_N1`,
+multiplexed against GPIO18_3 and GPIO18_4 at `0x200f0254` and `0x200f0258`. Both
+registers read 0 on this board, so the LED function is not selected and the
+pins are plain GPIO. See [19-pinmux-map.md](19-pinmux-map.md).
+
 ## Port multiplier
 
 | Property | Value |

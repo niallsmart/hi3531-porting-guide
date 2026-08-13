@@ -16,8 +16,8 @@ than only the cited example; the "Changed" row lists them all.
 | 3 | [SP804 timer topology](03-sp804-timer-topology.md) | **Confirmed** | `c17240e` |
 | 4 | [Device-tree handoff from U-Boot](04-device-tree-handoff.md) | **Confirmed** | `296668b` |
 | 5 | [Access to the upper DRAM bank](05-upper-dram-bank.md) | **Confirmed** | `6193589` |
-| 6 | [Secondary CPU startup](06-secondary-cpu-startup.md) | **Confirmed** | |
-| 7 | [Pinmux provenance and completeness](07-pinmux-map.md) | Not yet investigated | |
+| 6 | [Secondary CPU startup](06-secondary-cpu-startup.md) | **Confirmed** | `1c7094d` |
+| 7 | [Pinmux provenance and completeness](07-pinmux-map.md) | **Confirmed** | |
 | 8 | [Scope of the register documentation](08-register-documentation.md) | Not yet investigated | |
 | 9 | [GPIO and watchdog confidence](09-gpio-watchdog.md) | Not yet investigated | |
 | 10 | [DDR0 MMZ arithmetic](10-ddr0-mmz-arithmetic.md) | **Confirmed** | `a6ac3ed` |
@@ -709,3 +709,120 @@ or the flash image references it.
 | `doc/03-boot-chain.md` | U-Boot section points at the CPU1 release path and names `arch/arm/cpu/godnet/` |
 | `doc/16-porting-roadmap.md` | Phase 1 says to boot CPU0 only and why that is safe; Phase 5 gains a "second CPU" row; quick-reference row |
 | `doc/17-register-dumps.md` | New `SYS_CTRL + 0x134` dump; note that only the strap bits of `+0x8C` are stable |
+
+---
+
+## 7. Pinmux provenance and completeness — **Confirmed**
+
+Every specific example in the observation is correct, and the underlying
+criticism is right: the script comments were being used as the function map
+when the chip datasheet was available all along. The scale of the problem was
+larger than the five examples given.
+
+### Evidence
+
+**The datasheet has the complete map.** Section 2.1.5, "Description of
+Multiplexing Registers", in
+`Hi3531_V100R001C01SPC0D1/00.hardware/chip/documents_en/Hi3531 H.264 Codec Processor Data Sheet.pdf`
+(Issue 09, 2015-02-09, 1794 pages), gives one page per register:
+
+```
+muxctrl_reg103 is the multiplexing control register for the I2C_SCL pin.
+  Offset Address 0x19C     Register Name muxctrl_reg103
+
+  Bits   Access  Name             Description
+  [0]    RW      muxctrl_reg103   Multiplexing information about the I2C_SCL pin.
+                                  0: GPIO12_5
+                                  1: I2C_SCL
+```
+
+151 registers, `0x000` through `0x258`, no gaps. Extracted with `pdftotext
+-layout` and parsed; all 151 blocks yielded an offset, a pin name, a field width
+and a complete value list.
+
+**Diffing the datasheet against the old table: 65 wrong cells across 56 of the
+108 registers it covered.** The GPIO labels are shifted in three runs:
+
+| Range | Registers | Error |
+|---|---|---|
+| `0x000`–`0x048` | VIU0 block, 18 of 19 | Doc's GPIO number 3 too high. `0x008` was right by coincidence |
+| `0x098`–`0x0e0` | VIU2 block, 18 of 19 | Doc's GPIO number 3 too low. `0x0a0` was right by coincidence |
+| `0x0e4`, `0x0e8` | VGA | Values transposed — 0 is `GPIO7_1`/`GPIO7_2`, 1 is `VGA_HS`/`VGA_VS` |
+| `0x19c` | I²C SCL | `GPIO12_5`, not `GPIO12_4` |
+
+The two coincidences are what produced the duplicate labels the old document
+warned about: `GPIO2_3` appeared at both `0x040` and `0x04c` because `0x040`
+should have read `GPIO2_0`, and `GPIO4_3` appeared at both `0x08c` and `0x098`
+because `0x098` should have read `GPIO4_6`. So the "treat GPIO bit numbers with
+mild suspicion" caveat was pointing at a real defect without identifying it.
+
+The reviewer's two specific cases both check out: `0x0004` function 1 is
+`GPIO0_1`, and `0x000c` function 1 is `GPIO0_3`.
+
+**43 registers were missing entirely** — `0x190`, `0x194`, `0x1a0`,
+`0x1ac`–`0x240`, `0x254`, `0x258`. They hold the RGMII buses, the IR input, the
+NAND data and ready lines, the SPI-NOR (SFC) pins, the USB over-current and
+power-enable pins, and the two SATA activity LEDs.
+
+**The RGMII run is settled.** `0x1bc` is the `RGMII1_RXDV` pin, and function 1
+runs consecutively from there: RXD3–RXD0, RXCK, TXEN, TXD3–TXD0, TXCK,
+TXCKOUT — exactly the 13-pin run in the dump — with RXER and TXER at
+`0x1f0`/`0x1f4` as function 2. RGMII0's contribution is `0x1b0`–`0x1b8`
+(`TXCK`, `CRS`, `COL`); the rest of RGMII0 is on dedicated pins with no mux
+register, so these registers show RGMII1 is wired out but say nothing about
+RGMII0.
+
+**A live Linux capture was taken to go with the U-Boot one.** All 151 registers
+read with `devmem` on the running vendor kernel. **68 registers differ from the
+U-Boot dump**, so the old document was describing the bootloader's state as if
+it were the operating configuration.
+
+### Answers to the four questions
+
+**Can every row be reconciled against the datasheet?** Yes, all 151 — and 56 of
+the 108 previously documented needed correcting.
+
+**Should the scripts be used only for the selected values?** Yes, and that is
+now what they are used for. Better still, the live Linux capture supersedes them
+as evidence of what the board actually selects; the scripts only explain *why*.
+
+**Can the RGMII run be identified definitively?** Yes — see above. `doc/17` no
+longer calls it undocumented.
+
+**Other shifted or duplicated labels?** Yes: two long runs of them, described
+above, which is where both duplicates came from.
+
+### Also found
+
+- **The 19-pin bus at `0x0ec`–`0x134` is video input, not output.** U-Boot
+  leaves it at 3 (`VOU1120`, the BT.1120 output bus); the pinctrl script
+  rewrites it to 0, selecting `VIU3`. With VIU0–VIU2 also at 0, all four
+  video-input channels are active, which is what a 4-channel HD recorder needs.
+  `doc/17` previously drew the opposite conclusion from the U-Boot snapshot.
+- **SD/MMC and the fourth video input are mutually exclusive.** The whole SDIO
+  interface — `SDIO_CCLK_OUT`, `CARD_POWER_EN`, `CARD_DETECT`, `CWPR`, `CCMD`,
+  `CDATA0`–`CDATA3` — is function 4 of that same `0x0ec`–`0x110` run.
+- **SIO4 is six pins, not four.** `SIO4_XCLK` and `SIO4_XFS` at
+  `0x168`/`0x16c` were missing from `doc/13`. Under Linux every SIO pin is muxed
+  except `SIO0_RCLK` and `SIO0_RFS`, which read 0 despite the 4HD script writing
+  1 to both.
+- **USB port power**: only `USB1_PWREN` is routed to the controller; the other
+  three USB pins stay GPIO.
+- **The SATA LED outputs are not selected** — `0x254`/`0x258` read 0, leaving
+  GPIO18_3 and GPIO18_4 as plain GPIO.
+
+### Changed
+
+| File | What |
+|---|---|
+| `doc/19-pinmux-map.md` | Rebuilt from the datasheet: all 151 registers with pin names and field widths, a "what this board selects" table comparing U-Boot against the running kernel, and a corrected peripheral summary. Provenance section now warns against the script comments |
+| `doc/17-register-dumps.md` | RGMII identified; `+0x1B0` and `+0x1F8`–`+0x1FC` added; the video-output conclusion corrected; note that the dump is U-Boot's state and 68 registers differ under Linux |
+| `doc/09-gpio-pinmux-i2c.md` | Speculative range table and "you need the datasheet chapter" paragraph replaced with a pointer to `doc/19` |
+| `doc/06-ethernet.md` | RGMII1 pinmux corroboration, with the limit on what it proves about RGMII0 |
+| `doc/07-sata-storage.md` | The two SATA LED pins |
+| `doc/08-usb.md` | Over-current and port-power pins for both ports |
+| `doc/10-rtc-watchdog-misc.md` | SDIO pin names and the clash with VIU3; the `IR_IN` mux register |
+| `doc/13-audio.md` | SIO4 is six pins; the SIO0 anomaly |
+| `doc/16-porting-roadmap.md` | Quick-reference row; SD/MMC row notes the pin clash |
+| `doc/18-reference-assets.md` | Datasheet listed as the source for the pinmux map |
+| `doc/README.md` | Table-of-contents entry; gaps table no longer implies chip-level detail is missing; capture-method note mentions `devmem` |

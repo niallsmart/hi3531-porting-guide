@@ -28,6 +28,13 @@ by `0x4000`:
 Only `eth0` is wired to a connector. `eth1` exists in the SoC and is probed,
 but has no PHY and never comes up.
 
+The pinmux corroborates this. The whole **RGMII1** bus — RXDV, RXD3–RXD0,
+RXCK, TXEN, TXD3–TXD0, TXCK, TXCKOUT, plus RXER and TXER — is muxed to its
+Ethernet function at `0x200f01bc`–`0x1f4`, set by U-Boot and left alone by
+Linux. RGMII0 has mux registers only for `TXCK`, `CRS` and `COL`; the rest of
+its bus is on dedicated pins, so the pinmux cannot say whether RGMII0 is routed
+to anything. See [19-pinmux-map.md](19-pinmux-map.md).
+
 The MAC also claims two register windows outside its own block:
 
 - `0x200F0000`–`0x200F01FF` — pin multiplexing (IO_CONFIG)

@@ -46,37 +46,11 @@ Pin mux control (`IO_CONFIG`) is a flat array of 32-bit registers at
 **`0x200F0000`**, one register per pin, holding a small integer function
 selector.
 
-A live dump of `0x200F0000`–`0x200F01FC` taken from U-Boot is reproduced in
-[17-register-dumps.md](17-register-dumps.md). This is the **actual pin
-configuration of this board as shipped** and is the most valuable single
-artefact for reconstructing the pinmux, because it reflects the DVR's wiring
-rather than the reference design's.
-
-Summary of the observed values:
-
-| Register range | Value | Interpretation |
-|---|---|---|
-| `+0x000`–`+0x04C` | `0` | Function 0 |
-| `+0x04C` | `1` | Function 1 |
-| `+0x050`–`+0x0DC` | `0` | Function 0 |
-| `+0x0E4`–`+0x0E8` | `1` | Function 1 |
-| `+0x0EC`–`+0x134` | `3` | Function 3 — a contiguous run of 19 pins |
-| `+0x138`–`+0x1B0` | `0` | Function 0 |
-| `+0x1B4`–`+0x1B8` | `2` | Function 2 |
-| `+0x1BC`–`+0x1EC` | `1` | Function 1 — a contiguous run of 13 pins |
-| `+0x1F0`–`+0x1F4` | `2` | Function 2 |
-| `+0x1F8`–`+0x1FC` | `0` | Function 0 |
-
-The long contiguous runs are characteristic of wide parallel buses. The 19-pin
-run of function 3 is very likely the BT.1120 video input bus from the FPGA
-(8 bits of data plus clock and sync per port), and the 13-pin run of function 1
-is plausibly the RGMII interface to the Ethernet PHY. **These are inferences
-from the shape of the data, not confirmed mappings.**
-
-To turn this dump into a pinmux description you need the IO_CONFIG chapter of
-the Hi3531 datasheet
-(`Hi3531_V100R001C01SPC0D1/00.hardware/chip/documents_en/Hi3531 H.264 Codec Processor Data Sheet.pdf`),
-which maps register index to pin name and function value to signal.
+The block runs from `+0x000` to `+0x258` — 151 registers. Every one of them is
+described in [19-pinmux-map.md](19-pinmux-map.md), which pairs the chip
+datasheet's function map with the values read from this board in U-Boot and
+under the running kernel. That document, not this one, is where pinmux
+questions get answered.
 
 Note the Ethernet driver also claims `0x200F0000`–`0x200F01FF`, so it
 reconfigures some of these pins at probe.

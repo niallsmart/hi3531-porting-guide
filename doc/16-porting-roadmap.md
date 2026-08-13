@@ -141,7 +141,7 @@ In rough order of value:
 | Watchdog | Low | Confirmed ARM SP805 — `arm,sp805` node and the APB clock |
 | USB | Low–medium | Standard EHCI/OHCI, needs PHY glue |
 | RTC | Low | On-chip PL031 (`arm,pl031`) is trivial but has no battery. Battery-backed external chip needs `i2c-gpio` + `rtc-ds1307`; pins are known |
-| SD/MMC | Medium | `dw_mmc` may fit; socket may not exist |
+| SD/MMC | Medium | `dw_mmc` may fit; socket may not exist. Its pins are function 4 of the `VIU3` run, so it excludes the fourth video input |
 | L2 cache | Medium | Forward-port the vendor `cache-hil2v200.c`; performance only, boots without it |
 | Front panel, buzzer, alarm relays | Low–medium | All behind the AT89S52 on `ttyAMA1`. Protocol fully recovered and verified on the wire — userspace serial, no kernel driver needed |
 | Audio | High | Needs an ASoC platform driver written from scratch |
@@ -189,6 +189,7 @@ Where the answers to the most commonly needed questions live.
 | Ethernet `phy-mode`? | Plain `rgmii`, plus the CRG+0xEC bit layout | [06-ethernet.md](06-ethernet.md) |
 | Where is the MAC address? | `/etc/init.d/mac.dat`; factory master at SPI-NOR `0xBFC20` | [04-flash-storage.md](04-flash-storage.md) |
 | Bit-banged I²C pins? | SDA = GPIO12_4, SCL = GPIO12_5 | [19-pinmux-map.md](19-pinmux-map.md) |
+| What is each pinmux register? | All 151, from the chip datasheet, with this board's live values | [19-pinmux-map.md](19-pinmux-map.md) |
 | What does the board boot from? | SPI-NOR (`getinfo bootmode` → `spi`) | [03-boot-chain.md](03-boot-chain.md) |
 | How does the kernel get its DTB? | Appended to a zImage — this U-Boot has no FDT support. Keep `ARM_ATAG_DTB_COMPAT` off | [03-boot-chain.md](03-boot-chain.md#getting-a-device-tree-into-a-modern-kernel) |
 | Is the L2 cache a PL310? | No — HiSilicon L2 Cache V200, no mainline driver | [01-soc-overview.md](01-soc-overview.md#l2-cache-controller) |

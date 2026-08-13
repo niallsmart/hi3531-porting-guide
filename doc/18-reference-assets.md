@@ -69,6 +69,7 @@ Key files for a porter:
 | `linux-3.0.y/arch/arm/configs/godnet_defconfig` | Reference kernel config |
 | `linux-3.0.y/drivers/net/stmmac/stmmac_main.c` | RGMII mode, CRG+0xEC bit layout |
 | `mpp/extdrv/gpio_i2c_8b/gpio_i2c.c` | Bit-banged I²C reference implementation |
+| `00.hardware/chip/documents_en/Hi3531 H.264 Codec Processor Data Sheet.pdf` | The register manual. Section 2.1.5 is the complete pinmux function map — the source for [19-pinmux-map.md](19-pinmux-map.md) |
 
 ### Key files in the DVR's own filesystem
 

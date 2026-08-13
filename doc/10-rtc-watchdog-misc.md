@@ -243,6 +243,9 @@ Mainline has no Hi3531 IR driver. For a server this is dispensable; if wanted,
 it would be a small `rc-core` driver, and the register layout would come from
 the datasheet.
 
+The input pin is `IR_IN`, mux register `0x200f01f8`, function 0 — its reset
+state, and what this board reads. Function 1 would make it GPIO15_4.
+
 ## Alarm I/O
 
 The chassis label specifies **4 alarm channels**. Four "HUI KE" HK4100F-DC5V-SHG
@@ -351,6 +354,15 @@ A controller is present but unused:
 
 The SDK includes `drivers/mmc/himciv100_godnet.c` for U-Boot. The IP is
 Synopsys DesignWare, so mainline `dw_mmc` is a plausible fit.
+
+**The pins clash with video input.** The chip datasheet puts the whole SDIO
+interface on function 4 of the `0x200f00ec`–`0x110` run: `SDIO_CCLK_OUT`,
+`SDIO_CARD_POWER_EN`, `SDIO_CARD_DETECT`, `SDIO_CWPR`, `SDIO_CCMD` and
+`SDIO_CDATA0`–`CDATA3`. Those same registers are what the vendor sets to 0 for
+the `VIU3` video-input bus. An SD card and the fourth video-input channel
+cannot both be wired at once, which is a plausible reason no socket appears in
+the vendor configuration. For a server build the trade is free — video input is
+out of scope anyway. See [19-pinmux-map.md](19-pinmux-map.md).
 
 Whether an SD socket is physically fitted is unknown — the underside of the
 board has not been photographed. If one exists, it would be a convenient boot

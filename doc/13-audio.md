@@ -98,18 +98,25 @@ into the SIO block.
 
 ## I²S pin assignment
 
-The active pinctrl script muxes **SIO4** for audio:
+**SIO4** is the port that matters. It is the only bidirectional one — the only
+one with a `DOUT` as well as a `DIN` — and the only one with its own transmit
+clock and frame sync:
 
 | Signal | Pin | Register | Value |
 |---|---|---|---|
+| `SIO4_XCLK` | GPIO11_2 | `0x200f0168` | 1 |
+| `SIO4_XFS` | GPIO11_3 | `0x200f016c` | 1 |
 | `SIO4_RCLK` | GPIO11_4 | `0x200f0170` | 1 |
 | `SIO4_RFS` | GPIO11_5 | `0x200f0174` | 1 |
 | `SIO4_DOUT` | GPIO11_6 | `0x200f0178` | 1 |
 | `SIO4_DIN` | GPIO11_7 | `0x200f017c` | 1 |
 
 The SoC provides five serial audio ports (SIO0–SIO4) across
-`0x200f0138`–`0x200f017c`; only SIO4 is enabled, and it is the only one with a
-`DOUT` as well as a `DIN`, i.e. the only bidirectional port. See
+`0x200f0138`–`0x200f017c`, three pins each for SIO0–SIO3 (`RCLK`, `RFS`, `DIN`)
+and six for SIO4. Under the running kernel every one of those pins is muxed to
+its SIO function **except** `SIO0_RCLK` and `SIO0_RFS` at `0x200f0138`/`0x13c`,
+which read 0 despite the 4HD script writing 1 to both — something clears them
+after the script runs. `SIO0_DIN` stays muxed. See
 [19-pinmux-map.md](19-pinmux-map.md).
 
 Four record channels sharing one bidirectional port is consistent: the codec

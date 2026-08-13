@@ -65,34 +65,42 @@ board's shipped pin configuration.
 200f01f0: 00000002 00000002 00000000 00000000
 ```
 
-Decoded against the function map in [19-pinmux-map.md](19-pinmux-map.md):
+Decoded against the chip datasheet — see
+[19-pinmux-map.md](19-pinmux-map.md) for the full map and for the values the
+running kernel has:
 
 | Offset | Value | Selected function |
 |---|---|---|
 | `+0x000`–`+0x0E0` | 0 | VIU0 / VIU1 / VIU2 video input buses |
 | `+0x04C` | 1 | GPIO2_3 — buzzer control |
 | `+0x0E4`, `+0x0E8` | 1 | `VGA_HS`, `VGA_VS` |
-| `+0x0EC`–`+0x134` | 3 | **`VOU1120` — the BT.1120 video *output* bus, 19 pins** |
+| `+0x0EC`–`+0x134` | 3 | `VOU1120` — the BT.1120 video *output* bus, 19 pins |
 | `+0x138`–`+0x1A8` | 0 | GPIO: the audio SIO ports, hardware SPI, hardware I²C and UART1 alternates are all deselected |
-| `+0x1B4`–`+0x1B8` | 2 | undocumented |
-| `+0x1BC`–`+0x1EC` | 1 | undocumented — 13 pins, plausibly RGMII to the Ethernet PHY |
-| `+0x1F0`–`+0x1F4` | 2 | undocumented |
+| `+0x1B0` | 0 | `RGMII0_TXCK` |
+| `+0x1B4`, `+0x1B8` | 2 | `RGMII0_RXER`, `RGMII0_TXER` |
+| `+0x1BC`–`+0x1EC` | 1 | **RGMII1 — RXDV, RXD3–RXD0, RXCK, TXEN, TXD3–TXD0, TXCK, TXCKOUT** |
+| `+0x1F0`, `+0x1F4` | 2 | `RGMII1_RXER`, `RGMII1_TXER` |
+| `+0x1F8`–`+0x1FC` | 0 | `IR_IN`, `NF_DQ0` |
 
-Two things follow:
+The 13-pin run is Ethernet, confirmed from the datasheet rather than guessed:
+`0x1BC` is the `RGMII1_RXDV` pin, and function 1 runs consecutively through the
+receive bus, the transmit bus and both clocks. It is set here in U-Boot and left
+alone by Linux.
 
-- The 19-pin run is video **output**, not input. Video input sits at function 0
-  in the `0x000`–`0x0E0` block.
-- The GPIO-mode block at `+0x138`–`+0x1A8` is what makes the bit-banged I²C
-  work: `0x200f0198` and `0x200f019c` — SDA and SCL — are left as GPIO rather
-  than routed to the hardware I²C controller.
+The GPIO-mode block at `+0x138`–`+0x1A8` is what makes the bit-banged I²C work:
+`0x200f0198` and `0x200f019c` — SDA and SCL — are left as GPIO rather than
+routed to the hardware I²C controller, in U-Boot and afterwards.
 
-Registers `+0x1AC`–`+0x240` are not covered by any vendor pinctrl script, so
-the 13-pin run remains unidentified. The Ethernet guess is unconfirmed.
+**This dump is U-Boot's state, not the operating configuration.** Sixty-eight
+registers differ under the running kernel. The largest change is the 19-pin bus
+at `+0x0EC`–`+0x134`: the pinctrl script rewrites it from 3 to 0, turning it
+from the `VOU1120` output bus into the `VIU3` input bus, so all four video-input
+channels are active. SPI, UART1, UART2, the audio SIO ports and the HDMI pins
+are also set later. `stmmac` claims `0x200F0000`–`0x200F01FF` and reconfigures
+pins at probe. The side-by-side comparison is in
+[19-pinmux-map.md](19-pinmux-map.md#what-this-board-selects).
 
-This dump was taken in U-Boot, before Linux runs its pinctrl script, so some
-pins differ under the running vendor kernel — SPI, UART1, UART2, the audio SIO
-port and the HDMI pins are all set later. `stmmac` also claims
-`0x200F0000`–`0x200F01FF` and reconfigures pins at probe.
+The dump above stops at `+0x1FC`; the block continues to `+0x258`.
 
 ## Clock and reset generator — CRG at `0x20030000`
 

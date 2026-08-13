@@ -47,6 +47,25 @@ Device Tree:
 
 Nothing external was connected. Nothing was enumerated under Linux either.
 
+### Over-current and port-power pins
+
+Both ports have dedicated over-current and power-enable pins, each multiplexed
+against a GPIO:
+
+| Register | Pin | 0 | 1 | This board |
+|---|---|---|---|---|
+| `0x200f0234` | USB0_OVRCUR | GPIO17_3 | USB0_OVRCUR | 0 |
+| `0x200f0238` | USB0_PWREN | GPIO17_4 | USB0_PWREN | 0 |
+| `0x200f023c` | USB1_OVRCUR | GPIO17_5 | USB1_OVRCUR | 0 |
+| `0x200f0240` | USB1_PWREN | GPIO17_6 | USB1_PWREN | 1 |
+
+Only `USB1_PWREN` is routed to the controller; the other three are left as
+GPIO. So port power for USB1 is under hardware control and the rest is either
+hard-wired on the board or handled in software through those GPIOs. Nothing
+here blocks a port — the EHCI and OHCI drivers work without them — but a
+mainline tree wanting per-port power control has the pins available. See
+[19-pinmux-map.md](19-pinmux-map.md).
+
 ## Class drivers in the vendor kernel
 
 The vendor kernel is built with a broad set of USB class drivers, which is a
