@@ -16,19 +16,30 @@ command line and not loading the MMZ driver.
 | Range | Size | Owner |
 |---|---|---|
 | `0x80000000` – `0x8DFFFFFF` | 224 MB | Linux `System RAM` (set by `mem=224M`) |
-| `0x8E000000` – `0x9F9FFFFF` | 288 MB | MMZ zone `anonymous` |
+| `0x8E000000` – `0x9F9FFFFF` | 282 MB | MMZ zone `anonymous` |
 | `0x9FA00000` – `0x9FEFFFFF` | 5 MB | MMZ zone `jpeg` |
-| `0x9FF00000` – `0xBFFFFFFF` | — | Not mapped (hole between the two controllers) |
+| `0x9FF00000` – `0x9FFFFFFF` | 1 MB | DDR0, claimed by nothing |
+| `0xA0000000` – `0xBFFFFFFF` | — | Not mapped (hole between the two controllers) |
 | `0xC0000000` – `0xDF7FFFFF` | 504 MB | MMZ zone `ddr1` |
-| `0xDF800000` – `0xDFFFFFFF` | 8 MB | Not accounted for |
+| `0xDF800000` – `0xDFFFFFFF` | 8 MB | DDR1, claimed by nothing |
 
 DDR controller 0 backs `0x80000000`; DDR controller 1 backs `0xC0000000`. This
 was confirmed by a live U-Boot register read: DDRC1 at `0x20120000` holds
 `0xC0000000` in four consecutive registers at offset `+0x40`, while the
 equivalent DDRC0 registers are zero (base `0x80000000` being the default).
 
-Adding up the mapped regions gives 224 + 288 + 5 = 517 MB on DDR0 and
-504 MB on DDR1 — consistent with **512 MB per controller, 1 GB total**.
+Adding up the claimed regions gives 224 + 282 + 5 = 511 MB on DDR0 and 504 MB
+on DDR1 — consistent with **512 MB per controller, 1 GB total**, with 1 MB
+spare at the top of DDR0 and 8 MB at the top of DDR1.
+
+Neither tail is reserved for anything. Nothing in `/proc/iomem` covers them,
+and reading `0x9FF00000` and `0x9FFFFFF0` through `/dev/mem` returns the same
+uninitialised-DRAM pattern as unallocated addresses inside the MMZ zones. They
+are simply left over: HiSilicon's own reference `load3531` uses
+`anonymous,0,0x84000000,447M:ddr1,0,0xC0000000,511M`, which stops exactly 1 MB
+short of the top of each bank, and every MMZ variant on this board ends the
+`jpeg` zone at `0x9FF00000`. A port that describes the full 512 MB in the
+device tree gets that memory back along with everything else.
 
 ## What the firmware reports
 
@@ -111,8 +122,8 @@ This is corroborated by the vendor's own alternate load script,
 mmz=anonymous,0,0x84000000,447M:ddr1,0,0xC0000000,511M
 ```
 
-`0x84000000 + 447 MB = 0x9FFC0000` and `ddr1 = 511 MB` — both within 1 MB of a
-full 512 MB bank.
+`0x84000000 + 447 MB = 0x9FF00000` and `0xC0000000 + 511 MB = 0xDFF00000` —
+each exactly 1 MB short of a full 512 MB bank.
 
 Two further notes:
 

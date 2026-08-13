@@ -63,9 +63,14 @@ Success criterion: kernel output on `ttyAMA0` reaching "Kernel panic - not
 syncing: VFS: Unable to mount root filesystem", which means CPU, memory,
 interrupts and console all work.
 
-The unknowns here are the GIC base within the Cortex-A9 private region
-(`0x20300000`) and the exact SPI numbering. Both come from the datasheet and
-from `arch/arm/mach-godnet/` in the SDK kernel.
+The GIC addresses and the SPI numbering are both settled, from
+`arch/arm/mach-godnet/include/mach/platform.h` and `irqs.h` in the SDK kernel:
+PERIPHBASE is `0x20300000`, giving the distributor at `0x20301000` and the CPU
+interface at `0x20300100`, and the device-tree SPI number is the
+`/proc/interrupts` number minus 32. Both are tabulated in
+[01-soc-overview.md](01-soc-overview.md#converting-to-device-tree-spi-numbers).
+What still needs checking per peripheral is the **trigger type** in the third
+interrupt cell.
 
 > **The MCU watchdog is not something a port has to handle.** Once armed, the
 > AT89S52 hard-resets the SoC about 60 seconds after the kicks stop — measured —

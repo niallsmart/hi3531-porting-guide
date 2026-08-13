@@ -52,7 +52,7 @@ rather than inferred from the IP pairing. The evidence:
 | Block | Hardware evidence | Vendor software evidence |
 |---|---|---|
 | UART | AMBA peripheral ID at `0x20080FE0` = `0x11`, `0x10`, `0x24`, `0x00` → part `0x011`, designer `0x41` (ARM), rev 2 | `CONFIG_SERIAL_AMBA_PL011=y`; dmesg `ttyAMA0 at MMIO 0x20080000 (irq = 40) is a PL011 rev2` |
-| GIC | Distributor at `0x20301000`, CPU interface at `0x20300100` — the standard Cortex-A9 PERIPHBASE layout | `gic_init()` in `mach-godnet/core.c`; `/proc/interrupts` shows `GIC` for every line |
+| GIC | Distributor at `0x20301000`, CPU interface at `0x20300100` — the standard Cortex-A9 PERIPHBASE layout, see [the private peripheral region](#the-cortex-a9-private-peripheral-region) | `gic_init()` in `mach-godnet/core.c`; `/proc/interrupts` shows `GIC` for every line |
 | Timers | Peripheral ID at `0x20000FE0` → part `0x804` (SP804), designer ARM | `CONFIG_LOCAL_TIMERS` **not** set; SP804 register use in `core.c` |
 | Watchdog | Peripheral ID at `0x20040FE0` = `0x05`, `0x18`, `0x14`, `0x00` → part `0x805` (SP805), designer `0x41` (ARM), rev 1 | Vendor `wdt.ko`; U-Boot closes it before boot |
 | On-chip RTC | Peripheral ID at `0x20060FE0` = `0x31`, `0x10`, `0x04`, `0x00` → part `0x031` (PL031), designer `0x41` (ARM), rev 0 | None — the vendor system does not use it |
@@ -190,7 +190,7 @@ writing a device tree.
 | `0x20110000` | — | DDR controller 0 |
 | `0x20120000` | — | DDR controller 1 |
 | `0x20150000` | 0x10000 each | GPIO group 0 … GPIO group 18 (`0x20150000 + n*0x10000`) |
-| `0x20300000` | — | Cortex-A9 private peripherals (SCU, GIC, TWD) |
+| `0x20300000` | 0x2000 | Cortex-A9 PERIPHBASE — see the offsets below |
 | `0x20400000` | — | ARM debug |
 | `0x20700000` | 0x1000 | L2 cache controller (HiSilicon L2 Cache V200) |
 | `0x20800000` | — | PCIe0 controller registers |
@@ -261,6 +261,23 @@ Inter-processor interrupts IPI0–IPI5 are the standard ARM SMP set.
 
 Note the SoC declares `NR_IRQS:128`. Only CPU0 services peripheral interrupts
 in the vendor configuration — every peripheral IRQ shows a zero count on CPU1.
+
+### The Cortex-A9 private peripheral region
+
+PERIPHBASE is `0x20300000`, with the standard MPCore layout. From
+`arch/arm/mach-godnet/include/mach/platform.h` in the SDK kernel:
+
+| Address | Block | Mainline compatible |
+|---|---|---|
+| `0x20300000` | SCU | `arm,cortex-a9-scu` |
+| `0x20300100` | GIC CPU interface | part of the `arm,cortex-a9-gic` node |
+| `0x20300200` | Global timer | `arm,cortex-a9-global-timer` |
+| `0x20300600` | Private timer and watchdog (TWD) | `arm,cortex-a9-twd-timer`, PPI 29 |
+| `0x20301000` | GIC distributor | `arm,cortex-a9-gic` |
+
+These are definite, not inferred from the PERIPHBASE convention: `core.c`
+passes `CFG_GIC_DIST_BASE` and `CFG_GIC_CPU_BASE` to `gic_init()`, and
+`platsmp.c` reads the SCU at `REG_BASE_A9_PERI + REG_A9_PERI_SCU`.
 
 ### Converting to device-tree SPI numbers
 

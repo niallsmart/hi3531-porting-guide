@@ -151,6 +151,9 @@ Skip for the server use case. Nothing depends on audio, and the modules simply
 will not be loaded. The information here is recorded so the path could be
 picked up later.
 
-If audio is ever wanted, the order of work is: confirm the codec is physically
-present, find its I²C address, write the ASoC platform driver for the SIO
-block, then bind mainline `tlv320aic31xx` to it.
+If audio is ever wanted, the order of work is: recover the NVP1104B's audio
+register map (from the full datasheet, or by reverse-engineering
+`ncdecoder.ko`), write an ASoC platform driver for the SoC's SIO4 port, write a
+codec driver for the NVP1104B's PCM engine at I²C `0x60`, and a machine driver
+to bind the two. **Mainline `tlv320aic31xx` is not a shortcut** — that part is
+not fitted on this board.

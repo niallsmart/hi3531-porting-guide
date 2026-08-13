@@ -392,10 +392,6 @@ That is a real trap for anyone exploring a live board, which is how it was
 found here. It is not a trap for a port: a port either never arms the watchdog,
 or reaches its own kernel through a reset that clears it.
 
-Two things are not established: the MCU's timeout (only that it exceeds 30
-seconds), and what it actually does when the timeout expires. Testing that means
-stopping the vendor application and waiting to see whether the board resets.
-
 ### The MCU status broadcast
 
 Twice a second, unprompted, the MCU sends:
@@ -596,9 +592,17 @@ frames carrying `0x00`. Send each **once** and wait up to ~50 ms for the MCU to
 echo the frame back — the vendor's double-send is a race it loses, not a
 requirement.
 
-Note that the vendor application holds the port open and kicks the watchdog on
-it every 30 seconds, so a replacement userspace daemon has to take over that
-duty too rather than merely sharing the port.
+Whether you also have to kick the watchdog depends on how you got there, and the
+two cases are opposite:
+
+| Situation | Watchdog state | What your code must do |
+|---|---|---|
+| Clean boot into your own kernel | **Disarmed.** Nothing sent command 7, and the preceding reset cleared the MCU | Nothing. Never send command 7 and it stays disarmed |
+| Taking over UART1 on the running vendor system | **Armed**, and the vendor application has been kicking it every 30 s | Kick it yourself every 30 s from the moment you displace the vendor application, or reset the board within 60 s |
+
+The second case is the one to watch on a live board: the vendor application
+holds the port open, so taking it over means inheriting the kick, not merely
+sharing the port. See [the MCU watchdog](#the-mcu-watchdog).
 
 ## Live observations
 
