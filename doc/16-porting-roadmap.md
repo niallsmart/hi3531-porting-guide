@@ -109,7 +109,7 @@ Ranked by how much they would change the work.
    start, additive checksum. What remains is confirming it against real traffic
    and decoding the MCU's key-event replies. This is what stands between a
    mainline port and the front panel, buzzer, alarm relays and alarm inputs. See
-   [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#wire-protocol).
+   [20-front-panel-mcu.md](20-front-panel-mcu.md#wire-protocol).
 
 ## Quick reference
 

@@ -51,7 +51,8 @@ CPU, memory and UART are equally conventional.
 | 07 | [SATA and Disk Storage](07-sata-storage.md) | AHCI, JMB321 port multiplier, the 1 TB disk, expansion capacity |
 | 08 | [USB](08-usb.md) | EHCI and OHCI, class drivers, PHY glue |
 | 09 | [GPIO, Pin Multiplexing and I²C](09-gpio-pinmux-i2c.md) | 19 GPIO groups, pinmux, bit-banged I²C — **read the confidence notes** |
-| 10 | [RTC, Watchdog, IR and Front Panel](10-rtc-watchdog-misc.md) | Watchdog hazard, dual RTCs, AT89S52 MCU, CryptoMemory, SD/MMC |
+| 10 | [RTC, Watchdog, IR and Alarm I/O](10-rtc-watchdog-misc.md) | Watchdog hazard, dual RTCs, rear alarm terminals, CryptoMemory, SD/MMC |
+| 20 | [Front Panel MCU and Protocol](20-front-panel-mcu.md) | AT89S52 on `ttyAMA1`, the 5-byte binary protocol, command bytes |
 
 ### DVR-specific hardware — documented at wiring level
 

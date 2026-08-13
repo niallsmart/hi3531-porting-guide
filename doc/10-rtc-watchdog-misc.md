@@ -1,7 +1,10 @@
-# RTC, Watchdog, IR and Front Panel
+# RTC, Watchdog, IR and Alarm I/O
 
 Small peripherals, grouped. None is on the critical path for booting, but the
 watchdog can actively break a port if ignored.
+
+The front-panel microcontroller, which also gates the alarm I/O described here,
+has its own file: [20-front-panel-mcu.md](20-front-panel-mcu.md).
 
 ## Watchdog
 
@@ -132,105 +135,6 @@ Mainline has no Hi3531 IR driver. For a server this is dispensable; if wanted,
 it would be a small `rc-core` driver, and the register layout would come from
 the datasheet.
 
-## Front panel and MCU
-
-An **Atmel AT89S52** (U32) is on the board — an 8051-family microcontroller with
-8 KB flash. On DVRs this part typically handles the front-panel buttons, LEDs,
-the IR remote, and sometimes power sequencing, communicating with the SoC over
-a UART or a simple GPIO protocol.
-
-On this board it does exactly that, over `/dev/ttyAMA1` at 9600 8N1.
-
-`libhi3531.so` is shared across a family of boards, and carries two front-panel
-back-ends behind one interface. The application calls `ext_buzzer_set`,
-`ext_alarm_output_set` and so on, and the library routes to whichever back-end
-the board is built for. Despite its name, `mcusim` emulates nothing — it is the
-implementation for variants that omit the MCU and wire the panel to SoC pins
-instead, expanding them through a shift register (`alarm_set_clk`,
-`alarm_set_shift`).
-
-| Back-end | Transport | Representative symbols |
-|---|---|---|
-| `keyboard_realmcu_*` | Serial to a real MCU | `serial_read`, `serial_write`, `serial_set_speed`, `serial_set_parity`, `dev_open` |
-| `keyboard_mcusim_*` | SoC GPIOs driven directly | `get_gpio`, `set_gpio`, `send_high`, `send_low`, `alarm_set_clk`, `alarm_set_shift`, `scan_key` |
-
-**This board uses the `realmcu` path.** `libhi3531.so` references
-`/dev/ttyAMA1` alongside the `keyboard_realmcu_*` symbols; the application holds
-that port open with steady traffic; and no process holds `/dev/boardgpio` or the
-`fgpio` device, so the GPIO back-end is not in play. The only GPIO-style node
-open at runtime is `/dev/gpioi2c`, which is the bit-banged I²C bus.
-UART1 is muxed onto GPIO12_7 (RXD) and GPIO13_0 (TXD) by the pinctrl script —
-see [19-pinmux-map.md](19-pinmux-map.md).
-
-The MCU does considerably more than read buttons. The `realmcu` HAL exposes:
-
-| Function | What it does |
-|---|---|
-| `keyboard_realmcu_get_key_value`, `get_event` | Front-panel keys |
-| `keyboard_realmcu_buzzer_set` | **Drives the buzzer (BZ1)** |
-| `keyboard_realmcu_alarm_output_set` | **Drives the alarm relays** |
-| `keyboard_realmcu_alarm_status_get` | **Reads the alarm inputs** |
-| `keyboard_realmcu_cs485_led_set` | Front-panel LEDs |
-| `keyboard_realmcu_spot_channel` | Spot-monitor channel select |
-| `keyboard_realmcu_wdg_set` | A watchdog, separate from the SoC's |
-| `keyboard_realmcu_version_get` | MCU firmware version |
-
-### Wire protocol
-
-`libhi3531.so` is an unstripped ARM shared object with full symbols, so the
-protocol comes straight out of the disassembly rather than needing a capture.
-
-Frames are **binary and fixed at 5 bytes**, in both directions:
-
-| Offset | Field |
-|---|---|
-| 0 | `0xA0` — start byte |
-| 1 | Command |
-| 2 | Data byte 1 |
-| 3 | Data byte 2 (`0x00` for single-argument commands) |
-| 4 | Checksum — sum of bytes 0–3, modulo 256 |
-
-`keyboard_realmcu_serial_write(ctx, cmd, d1)` emits a frame with byte 3 zero;
-`serial_write_ex(ctx, cmd, d1, d2)` fills both data bytes. Both compute the
-checksum as `cmd + d1 + d2 - 0x60`, which is the plain additive sum because
-`0xA0 ≡ -0x60 (mod 256)`. The receive path checks the same `0xA0` start byte and
-the same 5-byte length, so the MCU answers in the same format.
-
-Each write is followed by `usleep(2)`, then `usleep(20)` after releasing the
-port mutex. The library waits for the MCU to echo the command back, and
-**retries the frame up to four times** before returning failure.
-
-Command bytes are the same values as the `keyboard_realmcu_operation()` opcodes:
-
-| Command | Meaning |
-|---|---|
-| 2 | Front-panel LEDs (5-bit field, mask `0x7C`) |
-| 4 | Alarm relay outputs (4-bit field, mask `0x0F`) |
-| 5 | Buzzer |
-| 6 | Unused by any named wrapper |
-| 7, 8 | Watchdog (`keyboard_realmcu_wdg_set` uses both) |
-| 9 | Boolean flag |
-| 10 | MCU firmware version query |
-| 12 | LEDs, two data bytes |
-| 13 | Two data bytes taken from the upper half of the argument |
-
-Commands 2 and 4 both read-modify-write a cached state word in the context
-(`+0x130` for LEDs, `+0x12c` for relays): bit 7 of the argument set means clear
-the named bits, clear means set them. **The relay mask is `0x0F` — four bits,
-one per relay**, which is an independent confirmation of the four-relay count
-from the software side.
-
-> Recovered by static analysis, and not yet checked against captured traffic.
-> The MCU→SoC direction shares the framing, but the encoding of key events in
-> `keyboard_realmcu_serial_read` has not been worked through.
-
-The MCU's own firmware is in its internal flash and is not part of any backup.
-Whether it is readable depends on its lock bits.
-
-For a server port, the front panel is optional. If you want the buttons, the
-practical approach is to snoop `/dev/ttyAMA1` under the vendor firmware and
-reimplement the protocol.
-
 ## Alarm I/O
 
 The chassis label specifies **4 alarm channels**. Four "HUI KE" HK4100F-DC5V-SHG
@@ -256,22 +160,19 @@ subsystem; see [05-uart-console.md](05-uart-console.md#terminal-block).
 
 ### How the relays and inputs are reached
 
-**Not by SoC GPIOs.** The alarm I/O goes through the AT89S52, over the same
-`/dev/ttyAMA1` link as the front panel: `keyboard_realmcu_alarm_output_set`
-drives the relays and `keyboard_realmcu_alarm_status_get` reads the inputs. The
-GPIO back-end that would have bit-banged them directly
-(`keyboard_mcusim_alarm_out`, `alarm_set_clk`, `alarm_set_shift`) is the
-alternative implementation for boards without an MCU, and is not used here — no
-process holds `/dev/boardgpio` at runtime. The relay bank sits directly beside
-the MCU on the board, which fits.
+**Not by SoC GPIOs.** The alarm I/O goes through the AT89S52 microcontroller,
+over the serial link on `/dev/ttyAMA1`:
+`keyboard_realmcu_alarm_output_set` drives the relays (command 4) and
+`keyboard_realmcu_alarm_status_get` reads the inputs. The relay bank sits
+directly beside the MCU on the board, which fits. The buzzer is on the same
+path.
 
-The buzzer (BZ1) is on the same path, via `keyboard_realmcu_buzzer_set`.
-
-This changes what it takes to use them from a mainline kernel. Four relay
-outputs and four inputs are still attractive on a home server, but reaching them
-is not a matter of `gpio-pl061` plus pin numbers — it means implementing the
-AT89S52's serial protocol on `ttyAMA1`. See
-[Front panel and MCU](#front-panel-and-mcu).
+That changes the cost of using them from a mainline kernel: not `gpio-pl061`
+plus pin numbers, but a userspace implementation of the MCU protocol. Four relay
+outputs remain an attractive thing to have on a home server — the protocol is
+documented in
+[20-front-panel-mcu.md](20-front-panel-mcu.md#wire-protocol), including the
+`0x0F` relay mask that confirms the four-relay count from the software side.
 
 ## Atmel CryptoMemory
 

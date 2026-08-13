@@ -83,7 +83,7 @@ serial console header (J3), and **ten SATA connector footprints**
 | U16 | TI, marked `PN521` / `35KG4` / `AL2R`, 56-pin | **Unidentified** — sited beside the VGA and HDMI connectors | — |
 | U17 | SG Micro SGM9119, marked `SGM9119YS8` / `1323C` | 3-channel 5th-order SD video reconstruction filter driver — analog video output stage | [12-video-output.md](12-video-output.md#cvbs-encoder) |
 | U19 | Nextchip NVP1104B | 4-channel analog video decoder | [11-video-input.md](11-video-input.md) |
-| U32 | Atmel AT89S52 | 8051 MCU — front panel | [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md) |
+| U32 | Atmel AT89S52 | 8051 MCU — front panel, buzzer, alarm I/O | [20-front-panel-mcu.md](20-front-panel-mcu.md) |
 | U34 | MaxLinear/Sipex SP490E, marked `SP490EE` / `1249L` / `C23819` | Full-duplex RS-485 transceiver — rear-panel RS485 | [05-uart-console.md](05-uart-console.md#rs485-rear-panel) |
 | U67 | Realtek RTL8211CL | Gigabit Ethernet PHY | [06-ethernet.md](06-ethernet.md) |
 | U88 | JMicron JMB321 | 5-port SATA port multiplier | [07-sata-storage.md](07-sata-storage.md) |

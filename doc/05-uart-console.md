@@ -21,9 +21,9 @@ is what an idle RS485 bus with nothing attached looks like.
 
 `ttyAMA1` is the front-panel MCU link. `libhi3531.so` references `/dev/ttyAMA1`
 alongside its `keyboard_realmcu_*` functions, and `LocalDevice.cpp` in `td3531`
-logs `Initial MCU fail` next to that path. The peer is the Atmel AT89S52 (U32);
-see [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md). The wire protocol is
-still unknown, and the link has not been traced on the PCB.
+logs `Initial MCU fail` next to that path. The peer is the Atmel AT89S52 (U32),
+and the 5-byte binary protocol it speaks is documented in
+[20-front-panel-mcu.md](20-front-panel-mcu.md).
 
 ## RS485 (rear panel)
 
