@@ -58,7 +58,7 @@ You may reconfigure the raspberrypi as necessary. This includes installing packa
 
 # Technical Language
 
-The can assume the audience for the documentation you're creating in doc/ is a sophisticated and experienced kernel developer who is deeply familiar with the Linux kernel, the ARM processor archecture, porting concerns and supporting tooling.
+You can assume the audience for the documentation you're creating in doc/ is a sophisticated and experienced kernel developer who is deeply familiar with the Linux kernel, the ARM processor architecture, porting concerns and supporting tooling.
 
 The user driving this session interactively is a Staff Backend Engineer. They have experience with system programming and operating systems, but are relatively new to embedded systems and kernel internals. If they ask you to explain something interactively, calibrate your explanation and jargon appropriately, and build up from any conceptual pre-reqs.
 

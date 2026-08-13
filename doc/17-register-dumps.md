@@ -14,15 +14,24 @@ differ.
 |---|---|---|
 | `md` | U-Boot prompt, before Linux runs | `hisilicon # md <address> <word_count>` |
 | `devmem` | Running vendor kernel, over telnet | `devmem <address>` |
+| `himd.l` | Running vendor kernel, over telnet | `himd.l <address> [words]` |
 
 Each dump below says which it is. The blocks in this document are U-Boot
 captures unless stated otherwise.
 
-> **Do not use the Linux-side `himm` tool for this.** `himm` reads a register
-> and then prompts `NewValue:` for a write. It is an interactive read-modify
-> tool, not a dump tool, and leaving a session at that prompt risks an
-> unintended register write. `himd` exists but returned `Bus error` on the
-> pinmux block.
+> **Never use `himm`.** It is HiSilicon's memory *modify* tool. Given one
+> argument it reads the address, prints the value, then blocks on a `NewValue:`
+> prompt and writes whatever is typed; given two it writes immediately without
+> confirming. Leaving a session at that prompt on this board risks an
+> unintended register write.
+
+The safe Linux-side options are `devmem` and **`himd.l`**, both read-only.
+Note the suffix: plain `himd` is the 8-bit variant and returns `Bus error` on
+the pinmux block, which only accepts 32-bit accesses. `himd.l` does 32-bit
+reads and dumps the block without complaint, printing offsets relative to the
+address given. All of `himm`, `himd`, `himd.l` and `himc` are symlinks to one
+multi-call binary, `/bin/btools`; source is in the SDK at
+`osdrv/tools/board_tools/reg-tools-1.0.0/source/tools/`.
 
 To retake or extend these dumps, see
 [18-reference-assets.md](18-reference-assets.md) for the capture script, and
