@@ -107,8 +107,9 @@ Success criterion: DHCP and SSH.
 
 ## Phase 4 — SATA and root filesystem
 
-`ahci_platform` plus `CONFIG_SATA_PMP`. The likely obstacle is SATA PHY
-initialisation via CRG. See [07-sata-storage.md](07-sata-storage.md).
+Use the Hi3531 AHCI glue plus `CONFIG_SATA_PMP`. The validated glue performs
+the required clock, reset, PHY and port-workaround sequence before handing the
+controller to libata. See [07-sata-storage.md](07-sata-storage.md).
 
 Then repartition the disk — **after confirming with the owner that the recorded
 video on the four FAT32 partitions can be destroyed** — and install a root
@@ -122,7 +123,7 @@ In descending order of value, then ascending effort:
 |---|---|---|---|
 | Watchdog | High | Low | Confirmed ARM SP805, a genuine PrimeCell — `arm,sp805`, SPI 2, and a 3 MHz clock (measured) |
 | The second CPU | High | Low–medium | ~30 lines of `smp_operations`: enable the SCU, write `__pa_symbol(secondary_startup)` to `SYS_CTRL + 0x134`. No reset or IPI needed — U-Boot leaves CPU1 running and polling. Also enable `ARM_ERRATA_764369` and `775420` for A9 r3p0 SMP. [Detail](01-soc-overview.md#secondary-cpu-startup) |
-| USB | High | Low–medium | Standard EHCI/OHCI, needs PHY glue |
+| USB | High | Low | Validated generic EHCI/OHCI hosts with one shared Hi3531 PHY provider |
 | Front panel, buzzer, alarm relays | High | Low–medium | All behind the AT89S52 on `ttyAMA1`. Protocol fully recovered and verified on the wire — userspace serial, no kernel driver needed |
 | RTC | Medium | Low | Use the validated battery-backed device at `0x68` with `i2c-gpio` + `rtc-ds1307`. The on-chip PL031 needs a Hi3531 unlock/reset quirk and has no battery |
 | L2 cache | Medium | Medium | Forward-port the vendor `cache-hil2v200.c`; performance only, boots without it |

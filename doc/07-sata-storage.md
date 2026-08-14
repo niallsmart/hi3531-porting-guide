@@ -1,9 +1,8 @@
 # SATA and Disk Storage
 
-Standard AHCI behind a port multiplier. Along with Ethernet, this is the other
-subsystem that should work almost immediately on a modern kernel — and it is
-the key to the whole project, since booting from disk avoids the unportable
-flash controllers.
+Standard AHCI behind a port multiplier. Libata handles the controller and
+multiplier after SoC-specific glue has enabled the clocks and programmed the
+Hi3531 PHY.
 
 ## AHCI controller
 
@@ -100,33 +99,56 @@ Mount options in use: `rw,relatime,fmask=0022,dmask=0022,codepage=cp437,iocharse
 
 ## Mainline support
 
-`ahci_platform` (`drivers/ata/ahci_platform.c`) has supported generic
-memory-mapped AHCI for many years, and libata's port-multiplier support handles
-the JMB321 generically. No new drivers should be needed.
+`ahci_platform` and libata supply the generic host and port-multiplier support,
+but the generic driver alone is not sufficient. With its clocks gated, the
+Hi3531 AHCI register window reads as zero. A small `ahci_hi3531` glue driver is
+required to enable the three clocks at `CRG + 0xB4`, sequence the host, PHY and
+lane resets, program both PHYs and apply the two vendor port workarounds before
+calling `ahci_platform_init_host()`.
 
 ```dts
 sata: sata@10080000 {
-    compatible = "hisilicon,hi3531-ahci", "generic-ahci";
-    reg = <0x10080000 0x10000>;
+    compatible = "hisilicon,hi3531-ahci";
+    reg = <0x10080000 0x10000>,
+          <0x20030000 0x100>;
+    reg-names = "ahci", "syscfg";
     interrupts = <0 36 4>;          /* SPI 36, level-high — vendor IRQ 68 */
-    ports-implemented = <0x3>;
 };
 ```
 
-Two things to check:
+The controller reports its two-port implemented mask itself once initialized,
+so the validated node does not override `ports-implemented`.
 
-1. **PHY and clock initialisation.** The SoC's SATA PHY almost certainly needs
-   CRG setup before the AHCI block responds. The vendor kernel does this in
-   platform code; the sequence would need extracting from the SDK sources under
-   `osdrv/kernel/linux-3.0.y/drivers/ata/` or from the Hi3531 datasheet.
-   This is the most likely failure point.
-2. **Port multiplier enablement.** Mainline requires `CONFIG_SATA_PMP`. It is
-   not enabled in all defconfigs.
+The reconciled Linux 6.18.42 port has exercised this path. It enumerated AHCI
+1.2 with 32 command slots, the five-port JMicron multiplier and the attached
+1 TB disk, and completed raw read I/O. `CONFIG_SATA_PMP` is required. The disk
+was kept unmounted and no write was issued.
+
+The initialization sequence came from the vendor 3.0.8
+`hi_sata_init()` and its Godnet configuration. Two details remain worth
+remembering:
+
+1. The vendor defaults configure both PHYs for 1.5 Gbps, even though the AHCI
+   capability register advertises 3 Gbps.
+2. `CRG + 0xB4` is shared SoC state, so the local glue maps that second window
+   without claiming exclusive ownership.
 
 ## Role in the port
 
 The recommended TFTP-kernel/SATA-root workflow is in
 [16-porting-roadmap.md](16-porting-roadmap.md).
+
+Neither flash controller has a mainline driver. A SATA root would avoid both,
+but it is not required for bring-up:
+
+- Keep the vendor U-Boot in SPI-NOR untouched.
+- Keep the vendor kernel in NAND untouched, so the DVR firmware remains
+  bootable as a fallback.
+- Put the root filesystem on SATA only when the disk contents may be replaced,
+  or use an NFS root while preserving the recordings.
+
+This gives a reversible, low-risk path to a working general-purpose system.
+See [16-porting-roadmap.md](16-porting-roadmap.md).
 
 ## U-Boot cannot read the SATA disk
 

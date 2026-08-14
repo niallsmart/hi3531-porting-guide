@@ -84,39 +84,58 @@ stick and a USB mouse for its on-screen interface.
 
 ## Mainline support
 
-Straightforward. Mainline has `ehci-platform` and `ohci-platform`
-(`drivers/usb/host/`), which handle generic memory-mapped controllers.
+Mainline's `ehci-platform` and `ohci-platform` drivers handle the two host
+controllers without Hi3531-specific host glue. The SoC-specific work belongs
+in one shared PHY provider referenced by both controller nodes.
 
 ```dts
+usbphy: usb-phy@20030000 {
+    compatible = "hisilicon,hi3531-usb-phy";
+    reg = <0x20030000 0x100>,
+          <0x20050000 0x100>;
+    reg-names = "crg", "sysctrl";
+    #phy-cells = <0>;
+};
+
 usb_ehci: usb@100b0000 {
-    compatible = "hisilicon,hi3531-ehci", "generic-ehci";
+    compatible = "generic-ehci";
     reg = <0x100b0000 0x10000>;
     interrupts = <0 31 4>;          /* SPI 31, level-high — vendor IRQ 63 */
+    phys = <&usbphy>;
+    phy-names = "usb";
 };
 
 usb_ohci: usb@100a0000 {
-    compatible = "hisilicon,hi3531-ohci", "generic-ohci";
+    compatible = "generic-ohci";
     reg = <0x100a0000 0x10000>;
     interrupts = <0 32 4>;          /* SPI 32, level-high — vendor IRQ 64 */
+    phys = <&usbphy>;
+    phy-names = "usb";
 };
 ```
 
-The likely complication is the **USB PHY**. HiSilicon SoCs typically require a
-vendor-specific PHY init sequence — clock enables, resets, and PHY tuning
-values written through CRG — before the controllers respond. The `hiusb-`
-prefix on the platform device names indicates exactly such a wrapper.
+The PHY provider implements the vendor 3.0.8 `hiusb_start_hcd()` sequence. It
+enables the USB clock and releases the resets at `CRG + 0xB8`, then configures
+the 8-bit UTMI interface and ULPI bypass at `SYS_CTRL + 0x80`. The generic PHY
+core refcounts the shared provider across EHCI and OHCI, replacing the vendor
+wrapper's manual open count.
 
-Where to find the sequence:
+The reconciled Linux 6.18.42 port validated this arrangement. Both two-port
+root hubs enumerated, and a high-speed USB flash device on the front panel
+completed 512 MiB of dispersed write/readback testing without a reset,
+transport error or I/O error. No `hisilicon,hi3531-ehci` or
+`hisilicon,hi3531-ohci` compatible is needed.
+
+The source for the sequence is:
 
 - SDK kernel source: `osdrv/kernel/linux-3.0.y/drivers/usb/host/` — look for
   `hiusb` platform glue
 - The Hi3531 datasheet's USB and CRG chapters
 
 Mainline's `phy-hisi-inno-usb2` and similar drivers cover later HiSilicon
-parts and may be a useful template, but none targets Hi3531 specifically.
+parts, but none targets this Hi3531 register layout.
 
 ## Assessment
 
-Low-to-moderate risk. The host controllers themselves are standard; the work is
-in the PHY bring-up glue. For a server, USB is useful but not on the critical
-path — Ethernet and SATA matter more. Defer it until after the system boots.
+Validated. The host controllers are standard; only the shared PHY bring-up
+needs local code. USB mass storage is loaded during normal Buildroot startup.
