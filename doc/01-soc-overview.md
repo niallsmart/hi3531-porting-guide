@@ -732,10 +732,15 @@ scu@20300000 {
 };
 
 sysctrl: system-controller@20050000 {
-    compatible = "hisilicon,hi3531-sysctrl", "syscon";
+    compatible = "hisilicon,hi3531-sysctrl", "hisilicon,sysctrl";
     reg = <0x20050000 0x1000>;
 };
 ```
+
+The generic fallback is deliberately `hisilicon,sysctrl`, not `syscon`:
+Linux's `hisi-reboot` driver matches the former. The Hi3531-specific string is
+used by the SMP code, while the fallback preserves the existing reboot
+integration.
 
 ### Errata
 
