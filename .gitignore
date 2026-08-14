@@ -25,3 +25,6 @@ datasheets/
 # macOS cruft
 .DS_Store
 ._*
+
+# vendor docs
+*.pdf

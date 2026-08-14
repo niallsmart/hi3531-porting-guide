@@ -1,6 +1,11 @@
 {
 	"folders": [
 		{
+			"name": "dhb_ax",
+			"path": "../dhb_ax"
+		},
+		{
+			"name": "hi3531-porting-guide",
 			"path": "."
 		}
 	],
