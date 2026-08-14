@@ -179,7 +179,7 @@ i2c-gpio {
     #address-cells = <1>;
     #size-cells = <0>;
 
-    rtc@68 { compatible = "dallas,ds1307"; reg = <0x68>; };   /* address unverified */
+    rtc@68 { compatible = "dallas,ds1307"; reg = <0x68>; };   /* target-validated */
 };
 ```
 

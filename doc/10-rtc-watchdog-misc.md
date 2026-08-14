@@ -132,15 +132,21 @@ From the peripheral ID registers:
 20060ff0: 0000000d 000000f0 00000005 000000b1
 ```
 
-Part `0x031`, designer `0x41` (ARM), revision 0 — a PL031, which mainline has
-supported for years.
+Part `0x031`, designer `0x41` (ARM), revision 0 — a PL031, but not one that
+works with an unmodified `rtc-pl031` driver. Hi3531 adds a write lock at
+`RTC + 0x20`. The SDK and datasheet require writing `0x1ACCE551` there before
+setting `RTC_CR` or `RTC_LR`; mainline does not perform that unlock.
 
-This is worth knowing before reaching for the external chip. A PL031 node gives
-a working `/dev/rtc0` with standard `hctosys` behaviour and no bit-banged I²C
-at all. **It has no battery backup**, being on-die, so it does not survive a
-power cycle — but it does survive a warm reset, and paired with NTP it is
-enough for most server use. The battery-backed external chip below is what you
-want if the clock has to be right at cold boot with no network.
+Target validation reproduced the distinction. With `CRG + 0xE4` bit 2 already
+clear (reset deasserted), the counter remained at zero and a plain driver write
+to `RTC_CR` did not stick. A volatile write of the unlock value followed by
+`RTC_CR = 1` started the counter, which then advanced at exactly one tick per
+second. This is an integration quirk, not a clock-gated or absent block.
+
+A new `hisilicon,hi3531-rtc` compatible and small driver quirk could perform
+the unlock and ensure reset is deasserted. Until then, do not add a plain PL031
+node expecting it to provide a working RTC. **It also has no battery backup**,
+so the external clock below remains the more useful system RTC.
 
 The vendor system ignores it entirely.
 
@@ -153,10 +159,12 @@ The vendor system ignores it entirely.
 | Bus | Bit-banged GPIO I²C (`gpio_ds1307_i2c_read` / `_write`) |
 | Driver banner | `2408  rtc Device Driver 201203081801 v1.0.0` |
 
-The driver is named for the DS1307 but its banner says "2408", and the vendor
-maintains a separate `hi_rtc.ko` as well. The actual part has not been
-identified from the PCB photos. Candidates in this family are the DS1307,
-DS1338, or an Intersil/Ricoh equivalent — several are register-compatible.
+The exact package has not been identified from the PCB photos, but its required
+software compatibility is now established. The vendor module defaults to its
+DS1307 mode: I²C address byte base `0xD0` (7-bit `0x68`) and the DS1307 register
+order. Its separate PCF8563-style mode uses address `0x51`. On the
+mainline port, `rtc-ds1307` successfully reads the eight time registers,
+registers the device at `0-0068`, and supplies `rtc0`.
 
 ### Reading the boot-time debug line
 
@@ -217,21 +225,26 @@ Two things are worth knowing before porting:
 - **Nothing corrects it afterwards.** `/usr/sbin/ntpd` is present in the
   filesystem but no NTP process is running.
 
-For a port there are two options, and neither is blocked.
+For a port there are two options, but only the external one works with
+unmodified mainline drivers.
 
-**The on-chip PL031** is the simpler one — a device-tree node and nothing else.
-No battery backup, so it needs setting at every cold boot.
+**The on-chip PL031** needs a Hi3531-specific unlock/reset quirk before it can
+be represented as a working RTC. It has no battery backup and needs setting at
+every cold boot.
 
 **The external chip** via mainline `rtc-ds1307` on `i2c-gpio`. The pins are
 known: **SDA = GPIO12_4, SCL = GPIO12_5**, established from the vendor pinctrl
 scripts and corroborated by an SDK reference comment — see
 [19-pinmux-map.md](19-pinmux-map.md#the-i²c-pins), which carries a
-ready-made `i2c-gpio` fragment. What is *not* known is the exact part, so
-whether `rtc-ds1307` binds cleanly has to be tried.
+ready-made `i2c-gpio` fragment. The exact manufacturer is not known, but
+`dallas,ds1307` register compatibility at address `0x68` is validated on the
+target.
 
-Either gives a proper `/dev/rtc0` with standard `hctosys` behaviour and correct
-BCD handling — strictly better than the vendor arrangement. Set the chip once
-to a correct time, then run NTP.
+The external device gives a proper `/dev/rtc0` with standard `hctosys`
+behaviour and correct BCD handling. A Linux 6.18.42 boot registered it as
+`rtc0`, advanced by five seconds during a five-second observation, and logged
+that it set system time from the RTC. Set the chip once to a correct time, then
+run NTP.
 
 ## Infrared receiver
 
