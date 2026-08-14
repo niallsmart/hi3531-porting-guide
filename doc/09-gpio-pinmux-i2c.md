@@ -30,6 +30,12 @@ GPIO group n base = 0x20150000 + n * 0x10000     for n = 0 .. 18
 Groups 0–17 have eight pins each; **GPIO18 has only six**, so there are 150
 pins in total, not 152.
 
+Linux's PL061 driver nevertheless hard-codes eight lines per bank, and the
+PL061 binding has no property for reducing that width. GPIO18 therefore appears
+as an eight-line gpiochip even though only offsets 0–5 exist in the hardware.
+Do not assign offsets 6 or 7 to a consumer. A Hi3531-specific driver quirk would
+be needed to hide them from the userspace ABI.
+
 ### The register layout is PL061
 
 Confirmed against chapter 14.5.5 of the Hi3531 datasheet, which gives the
@@ -51,41 +57,39 @@ Byte-for-byte the PL061 map, including the masked-data scheme the SDK's
 bit-banged I²C driver relies on. Out of reset all pins are inputs, all
 registers zero, and the trigger mode is edge-sensitive — again standard.
 
-### But the blocks have no AMBA identity
+### The blocks have native AMBA identities
 
-**This is the part that stops `gpio-pl061` working out of the box.** The
-datasheet's register summary ends at `+0x41C`, and the PrimeCell identification
-registers a real PL061 carries at `+0xFE0`–`+0xFFC` are simply not implemented.
-Reading them on the live device returns stable nonsense rather than an ID:
+Target validation with Linux 6.18.42 shows that `gpio-pl061` works without an
+identity override. All nineteen devices, from `20150000.gpio` through
+`20270000.gpio`, bind to `pl061_gpio` and report:
 
-```
-GPIO0  +0xFE0: 31F28401 1031FBDD FF7D54C4 1C88B7F9   (should be 61 10 04 00)
-GPIO5  +0xFE0: CDFF1303
-GPIO12 +0xFF0: FD7D4188 48047FFE 79DF2601 04406FDF   (should be 0D F0 05 B1)
+```text
+AMBA_ID=00041061
 ```
 
-The values are repeatable and differ between blocks, so this is bus behaviour
-for an undecoded region, not a floating read. Compare the watchdog at
-`0x20040000`, which *is* a real PrimeCell and returns a clean `0x805` with the
-`0D F0 05 B1` signature — see
-[10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#the-ip-is-an-sp805).
+The live device tree used for that test contains no
+`arm,primecell-periphid`. Individual 32-bit reads on GPIO0, GPIO12 and GPIO18
+all returned the same valid identity:
 
-Mainline `gpio-pl061` is an `amba_driver` matching on
-`.id = 0x00041061, .mask = 0x000fffff`. The AMBA bus reads those registers to
-build the ID, so a plain `compatible = "arm,pl061", "arm,primecell"` node will
-never match. **The fix is one property**, which makes `amba_device_add()` skip
-the hardware read entirely:
+```text
+PID0..PID3 (+0xFE0..+0xFEC): 61 10 04 00
+CID0..CID3 (+0xFF0..+0xFFC): 0D F0 05 B1
+```
+
+The PID encodes PL061 peripheral ID `0x00041061`, and the CID is the standard
+PrimeCell signature. The earlier invalid values published here could not be
+reproduced and are withdrawn; their cause is unknown. They must not be used as
+evidence that the registers are absent.
+
+Use normal AMBA discovery. An override is neither needed nor desirable because
+it would conceal a genuine identity-read failure:
 
 ```dts
 gpio12: gpio@20210000 {
     compatible = "arm,pl061", "arm,primecell";
     reg = <0x20210000 0x1000>;
-    arm,primecell-periphid = <0x00041061>;   /* IDs are not implemented */
-    interrupts = <0 82 4>;                   /* SPI 82 — shared with GPIO11 */
     gpio-controller;
     #gpio-cells = <2>;
-    interrupt-controller;
-    #interrupt-cells = <2>;
     clocks = <&apb_clk>;
     clock-names = "apb_pclk";
 };
@@ -206,7 +210,9 @@ peripherals are needed to boot and run.
 
 If you do want them:
 
-- Use `gpio-pl061` for the GPIO groups, with `arm,primecell-periphid = <0x00041061>` on every node — the blocks are PL061 but carry no AMBA ID, so the driver cannot match without it. Watch the shared interrupts above GPIO6.
+- Use `gpio-pl061` for the GPIO groups and let the AMBA core read their valid
+  native identities. No `arm,primecell-periphid` override is needed. Watch the
+  shared interrupts above GPIO6, and do not use GPIO18 offsets 6 or 7.
 - Use mainline `i2c-gpio` on GPIO12_4/GPIO12_5 to recreate the bit-banged bus,
   then attach `rtc-ds1307` for the RTC. This replaces the whole vendor
   `gpioi2c` stack with mainline code. (Do **not** plan on `sii902x` for HDMI —

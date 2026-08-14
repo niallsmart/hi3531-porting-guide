@@ -941,7 +941,7 @@ about exactly this.
 Both hedges were resolvable, and resolving the GPIO one turned up an
 integration problem that would have cost a porter real time.
 
-### GPIO — the layout is PL061, the identity is not
+### GPIO — the layout and identity are PL061
 
 Chapter 14.5.5 gives the register map, and it is PL061 byte for byte:
 `GPIO_DATA` address-masked over `0x000`–`0x3FC`, then `DIR` `0x400`, `IS`
@@ -950,29 +950,25 @@ Chapter 14.5.5 gives the register map, and it is PL061 byte for byte:
 Trigger capability is the full PL061 set. Also: GPIO18 has **six** pins, not
 eight, so the part has 150 GPIOs.
 
-**But the AMBA identification registers are not implemented.** Live reads:
+**Later target validation disproved the original AMBA-ID finding.** On a
+Linux 6.18.42 boot whose DT contains no `arm,primecell-periphid`, all nineteen
+banks bound to `pl061_gpio` and reported `AMBA_ID=00041061`. Individual reads
+from GPIO0, GPIO12 and GPIO18 all returned:
 
 ```
-GPIO0  +0xFE0: 31F28401 1031FBDD FF7D54C4 1C88B7F9    (a PL061 gives 61 10 04 00)
-GPIO5  +0xFE0: CDFF1303
-GPIO12 +0xFF0: FD7D4188 48047FFE 79DF2601 04406FDF    (should be 0D F0 05 B1)
+PID0..PID3: 61 10 04 00
+CID0..CID3: 0D F0 05 B1
 ```
 
-Repeatable across reads and different between blocks, so this is undecoded-bus
-behaviour rather than a floating read. The contrast with the watchdog at
-`0x20040000`, which returns a clean `0x805` and the PrimeCell signature, shows
-the method is sound.
+The cause of the earlier invalid values is unknown, but the result is
+independently constrained: without a DT override, the AMBA core must obtain the
+ID from those registers before the driver can bind. The original required-
+override conclusion is withdrawn. Normal AMBA discovery works and should be
+used.
 
-This is decisive for the port. `gpio-pl061` is an `amba_driver` with
-`.id = 0x00041061, .mask = 0x000fffff`, and `amba_device_add()` reads those
-registers to build the ID — so `compatible = "arm,pl061", "arm,primecell"`
-alone never matches. `of_amba_device_create()` reads
-`arm,primecell-periphid` into `dev->periphid`, and `amba_device_add()` only
-calls `amba_read_periphid()` when `!dev->periphid`, so one property fixes it:
-
-```dts
-arm,primecell-periphid = <0x00041061>;
-```
+GPIO18 still has only six physical lines. Upstream `gpio-pl061` hard-codes an
+eight-line gpiochip and the binding offers no width property, so offsets 6 and
+7 remain visible to userspace and must not be assigned to consumers.
 
 **Interrupts, and the complication.** IRQs 105–117, DT SPI 73–85. GPIO0–GPIO6
 get dedicated lines; above that they are paired — GPIO7/8 on 112, GPIO9/10 on
@@ -1018,9 +1014,9 @@ the MCU watchdog.
 
 | File | What |
 |---|---|
-| `doc/09-gpio-pinmux-i2c.md` | GPIO section rewritten: confirmed PL061 register table, the missing AMBA identity with live evidence and the `arm,primecell-periphid` fix, a worked node, the interrupt map and the shared-line problem, GPIO18's six pins |
+| `doc/09-gpio-pinmux-i2c.md` | GPIO section rewritten: confirmed PL061 register table and native identity, a worked node, the interrupt map and shared-line problem, and GPIO18's six-pin hardware/eight-line ABI mismatch |
 | `doc/10-rtc-watchdog-misc.md` | Datasheet chapter and IRQ added; new measured-clock section; the stale "says nothing about the hardware timeout" note removed; the vendor kernel re-arming it recorded |
-| `doc/16-porting-roadmap.md` | Watchdog row gains SPI and clock; new quick-reference row for the `periphid` trap |
+| `doc/16-porting-roadmap.md` | Watchdog row gains SPI and clock; quick-reference row records native GPIO identities and the GPIO18 width trap |
 
 ---
 

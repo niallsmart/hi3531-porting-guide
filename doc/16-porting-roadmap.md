@@ -157,6 +157,37 @@ Ranked by how much they would change the work.
 5. **The FPGA's I²C address and register map**, and what its bitstream
    implements. Only matters if the video capture path is ever revived.
 
+## Quick reference
+
+Where the answers to the most commonly needed questions live.
+
+| Question | Answer | Detail in |
+|---|---|---|
+| How much RAM, and where? | 512 MB at `0x80000000`, 512 MB at `0xC0000000` | [02-memory-map.md](02-memory-map.md) |
+| Why is only half the RAM showing? | DDR1 is outside a 3G-split kernel's low-memory window — use `VMSPLIT_2G` | [02-memory-map.md](02-memory-map.md#making-both-banks-usable) |
+| Device-tree interrupt numbers? | SPI = `/proc/interrupts` number − 32 | [01-soc-overview.md](01-soc-overview.md) |
+| Ethernet `phy-mode`? | Plain `rgmii` — but no driver in the path acts on it | [06-ethernet.md](06-ethernet.md#interface-mode) |
+| Which Ethernet MAC is wired up? | GMAC1 at `0x101C4000` = `eth0`, on RGMII1, CRG+0xEC bits [31:16] | [06-ethernet.md](06-ethernet.md) |
+| Will `gpio-pl061` just work? | Yes. All 19 blocks have native `0x00041061` AMBA IDs; do not override them. GPIO18 offsets 6 and 7 are physically absent but remain visible through the upstream driver's eight-line ABI | [09-gpio-pinmux-i2c.md](09-gpio-pinmux-i2c.md#the-blocks-have-native-amba-identities) |
+| Where is the MAC address? | `/etc/init.d/mac.dat`; factory master at SPI-NOR `0xBFC20` | [04-flash-storage.md](04-flash-storage.md) |
+| Bit-banged I²C pins? | SDA = GPIO12_4, SCL = GPIO12_5 | [19-pinmux-map.md](19-pinmux-map.md) |
+| What is each pinmux register? | All 151, from the chip datasheet, with this board's live values | [19-pinmux-map.md](19-pinmux-map.md) |
+| Is there a full SoC address map? | Yes — every block the chip decodes, with register extents | [01-soc-overview.md](01-soc-overview.md#register-base-map) |
+| Is there a full interrupt list? | Yes — all 96 SPIs, with the vendor's names cross-referenced | [01-soc-overview.md](01-soc-overview.md#interrupt-map) |
+| What does the board boot from? | SPI-NOR (`getinfo bootmode` → `spi`) | [03-boot-chain.md](03-boot-chain.md) |
+| How does the kernel get its DTB? | Appended to a zImage — this U-Boot has no FDT support. Keep `ARM_ATAG_DTB_COMPAT` off | [03-boot-chain.md](03-boot-chain.md#getting-a-device-tree-into-a-modern-kernel) |
+| Is the L2 cache a PL310? | No — HiSilicon L2 Cache V200, no mainline driver | [01-soc-overview.md](01-soc-overview.md#l2-cache-controller) |
+| Which timer drives the clock? | ARM SP804 at `0x20000000`, IRQ 35 — not the A9 TWD | [01-soc-overview.md](01-soc-overview.md#timers) |
+| How is CPU1 released? | U-Boot parks it polling `SYS_CTRL + 0x134`; write the entry point there. No reset register, no IPI | [01-soc-overview.md](01-soc-overview.md#secondary-cpu-startup) |
+| Is the SoC watchdog portable? | Yes — confirmed ARM SP805, use `arm,sp805` | [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#the-ip-is-an-sp805) |
+| Is there an RTC with a mainline driver? | Yes — on-chip ARM PL031, but no battery backup | [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#on-chip-rtc--an-arm-pl031) |
+| Where does the rear RS485 go? | UART2 / `ttyAMA2` at `0x200A0000`, IRQ 42, 9600 | [05-uart-console.md](05-uart-console.md#rs485-rear-panel) |
+| How do I read the front-panel keys? | Parse `0A 01 <code> <hold>` on `ttyAMA1`; 23 codes mapped | [20-front-panel-mcu.md](20-front-panel-mcu.md#key-codes) |
+| How do I read the alarm inputs? | Don't poll — the MCU broadcasts them at 2 Hz, active low | [20-front-panel-mcu.md](20-front-panel-mcu.md#the-mcu-status-broadcast) |
+| What triggers an alarm input? | A dry contact shorting it to ground; 5.2 V pull-up | [10-rtc-watchdog-misc.md](10-rtc-watchdog-misc.md#alarm-inputs-are-dry-contact-active-low) |
+| Where is the FPGA bitstream? | `.rodata` of `fpga_jtag.ko`, a Lattice VME file | [11-video-input.md](11-video-input.md) |
+| Which external codecs are fitted? | None — no ADV7179, TLV320AIC31 or SiI9024 | [12-video-output.md](12-video-output.md) |
+
 ## Out of scope
 
 Not documented beyond what appears elsewhere in this set: the internals of the

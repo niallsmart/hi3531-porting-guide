@@ -41,10 +41,9 @@ established, which validates the method.
 So **mainline `wdt-sp805` applies directly** — a device-tree node with
 `compatible = "arm,sp805"` and the APB clock is all that is needed.
 
-Unlike the GPIO blocks, which have the PL061 register layout but no AMBA
-identity at all, the watchdog is a genuine PrimeCell and needs no
-`arm,primecell-periphid` override. See
-[09-gpio-pinmux-i2c.md](09-gpio-pinmux-i2c.md#but-the-blocks-have-no-amba-identity).
+Like the GPIO blocks, the watchdog has a valid native PrimeCell identity and
+needs no `arm,primecell-periphid` override. See
+[09-gpio-pinmux-i2c.md](09-gpio-pinmux-i2c.md#the-blocks-have-native-amba-identities).
 
 Chapter 3.8 of the datasheet gives the full register map — `WdogLoad`,
 `WdogValue`, `WdogControl`, `WdogIntClr`, `WdogRIS`, `WdogMIS`, `WdogLock` with
