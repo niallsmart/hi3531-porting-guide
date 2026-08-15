@@ -1,0 +1,695 @@
+U-Boot 2010.06 (Nov 01 2012 - 11:21:03)
+
+DRAM:  256 MiB
+NAND:  Special Nand id table Version 1.35
+Nand ID: 0x01 0xF1 0x00 0x1D 0x01 0xF1 0x00 0x1D
+Nand(Hardware): Block:128KB Page:2KB Chip:128MB*1 OOB:64B ECC:1bit
+128 MiB
+Spiold(cs1) ID: 0x01 0x40 0x15 0x01 0x40 0x15
+Spi(cs1): Block:64KB Chip:2MB Name:"S25FL216K"
+In:    serial
+Out:   serial
+Err:   serial
+current auto update version : 201211011107
+current used param offset 0xa0000
+current do_check_flash_boot_param
+close watch dog begin...............
+test wdg 0
+test wdg 1
+dog_close
+dev 0 set background color!
+dev 2 set background color!
+dev 3 set background color!
+dev 0 opened!
+dev 2 opened!
+dev 3 opened!
+jpeg decoding ...
+<<addr=0xc0000000, size=0x1156f, vobuf=0xc1000000>>
+mmu_enable
+<<imgwidth=480, imgheight=300, linebytes=960>>
+decode success!!!!
+dev 0 set background color!
+dev 2 set background color!
+dev 3 set background color!
+dev 0 opened!
+vo hd 0 end
+dev 2 opened!
+dev 3 opened!
+vo cvbs end
+graphic layer 0 opened!
+graphic layer 2 opened!
+graphic layer 3 opened!
+wait end time
+USB:   scanning bus for devices... 2 USB Device(s) found
+usb_stor_get_info->1412,blksz:512
+1 Storage Device(s) found
+Interface:  USB
+  Device 0: Vendor: Corsair  Rev: 1100 Prod: Flash Voyager
+            Type: Removable Hard Disk
+            Capacity: 7680.0 MB = 7.5 GB (15728640 x 512)
+Partition 1: Filesystem: FAT32 "DHBAXBOOT  "
+reading kern31
+reading rootfs31
+reading appsf31
+reading uboot31
+judge ddr init
+user init finish.
+Hit any key to stop autoboot:  0
+ begin ... do_auto_logo_image
+
+NAND read: device 0 offset 0x0, size 0x500000
+ 5242880 bytes read: OK
+## Booting kernel from Legacy Image at 82000000 ...
+   Image Name:   Linux-3.0.8
+   Image Type:   ARM Linux Kernel Image (uncompressed)
+   Data Size:    3629636 Bytes = 3.5 MiB
+   Load Address: 80008000
+   Entry Point:  80008000
+   Loading Kernel Image ... OK
+OK
+
+Starting kernel ...
+
+Uncompressing Linux... done, booting the kernel.
+Linux version 3.0.8 (lzg@localhost.localdomain) (gcc version 4.4.1 (Hisilicon_v100(gcc4.4-290+uclibc_0.9.32.1+eabi+linuxpthread)) ) #20121101111407 SMP Mon
+ Mar 11 11:23:32 CST 2013
+CPU: ARMv7 Processor [413fc090] revision 0 (ARMv7), cr=10c53c7f
+CPU: VIPT nonaliasing data cache, VIPT aliasing instruction cache
+Machine: godnet
+Memory policy: ECC disabled, Data cache writealloc
+PERCPU: Embedded 7 pages/cpu @c08bf000 s5536 r8192 d14944 u32768
+Built 1 zonelists in Zone order, mobility grouping on.  Total pages: 56896
+Kernel command line: mem=224M console=ttyAMA0,115200 root=/dev/mtdblock2 rootfstype=yaffs2 mtdparts=hi_sfc:2M(boot);hinand:8M(kernel),16M(rootfs),64M(user)
+,32M(hdr000000) pcieclkext=0
+PID hash table entries: 1024 (order: 0, 4096 bytes)
+Dentry cache hash table entries: 32768 (order: 5, 131072 bytes)
+Inode-cache hash table entries: 16384 (order: 4, 65536 bytes)
+Memory: 224MB = 224MB total
+Memory: 220156k/220156k available, 9220k reserved, 0K highmem
+Virtual kernel memory layout:
+    vector  : 0xffff0000 - 0xffff1000   (   4 kB)
+    fixmap  : 0xfff00000 - 0xfffe0000   ( 896 kB)
+    DMA     : 0xffc00000 - 0xffe00000   (   2 MB)
+    vmalloc : 0xce800000 - 0xfe000000   ( 760 MB)
+    lowmem  : 0xc0000000 - 0xce000000   ( 224 MB)
+    modules : 0xbf000000 - 0xc0000000   (  16 MB)
+      .init : 0xc0008000 - 0xc0039000   ( 196 kB)
+      .text : 0xc0039000 - 0xc0676000   (6388 kB)
+      .data : 0xc0676000 - 0xc069ed60   ( 164 kB)
+       .bss : 0xc069ed84 - 0xc06fbc84   ( 372 kB)
+SLUB: Genslabs=13, HWalign=32, Order=0-3, MinObjects=0, CPUs=2, Nodes=1
+Hierarchical RCU implementation.
+NR_IRQS:128 nr_irqs:128 128
+sched_clock: 32 bits at 155MHz, resolution 6ns, wraps every 27709ms
+sched_clock: wrong multiply/shift: 432960413>>26 vs calculated 3463683303>>29
+sched_clock: fix multiply/shift to avoid scheduler hiccups
+Console: colour dummy device 80x30
+Calibrating delay loop... 1849.75 BogoMIPS (lpj=9248768)
+pid_max: default: 32768 minimum: 301
+Mount-cache hash table entries: 512
+CPU: Testing write buffer coherency: ok
+CPU1: Booted secondary processor
+Brought up 2 CPUs
+SMP: Total of 2 processors activated (3706.06 BogoMIPS).
+NET: Registered protocol family 16
+Serial: AMBA PL011 UART driver
+uart:0: ttyAMA0 at MMIO 0x20080000 (irq = 40) is a PL011 rev2
+console [ttyAMA0] enabled
+uart:1: ttyAMA1 at MMIO 0x20090000 (irq = 41) is a PL011 rev2
+uart:2: ttyAMA2 at MMIO 0x200a0000 (irq = 42) is a PL011 rev2
+uart:3: ttyAMA3 at MMIO 0x200b0000 (irq = 43) is a PL011 rev2
+bio: create slab <bio-0> at 0
+controller0, config base:0x20800000, mem size:0x800000
+controller1, config base:0x20810000, mem size:0x800000
+PCI: bus0: Fast back to back transfers disabled
+PCI: bus1: Fast back to back transfers enabled
+PCI: bus2: Fast back to back transfers disabled
+PCI: bus3: Fast back to back transfers enabled
+pci 0000:02:00.0: BAR 0: assigned [mem 0x60000000-0x607fffff pref]
+pci 0000:02:00.0: BAR 0: set to [mem 0x60000000-0x607fffff pref] (PCI address [0x60000000-0x607fffff])
+pci 0000:02:00.0: BAR 1: assigned [mem 0x60800000-0x6080ffff]
+pci 0000:02:00.0: BAR 1: set to [mem 0x60800000-0x6080ffff] (PCI address [0x60800000-0x6080ffff])
+pci 0000:02:00.0: BAR 6: assigned [mem 0x60810000-0x6081ffff pref]
+pci 0000:02:00.0: PCI bridge to [bus 03-03]
+pci 0000:02:00.0:   bridge window [io  disabled]
+pci 0000:02:00.0:   bridge window [mem disabled]
+pci 0000:02:00.0:   bridge window [mem pref disabled]
+pci 0000:00:00.0: BAR 0: assigned [mem 0x30000000-0x307fffff pref]
+pci 0000:00:00.0: BAR 0: set to [mem 0x30000000-0x307fffff pref] (PCI address [0x30000000-0x307fffff])
+pci 0000:00:00.0: BAR 1: assigned [mem 0x30800000-0x3080ffff]
+pci 0000:00:00.0: BAR 1: set to [mem 0x30800000-0x3080ffff] (PCI address [0x30800000-0x3080ffff])
+pci 0000:00:00.0: BAR 6: assigned [mem 0x30810000-0x3081ffff pref]
+pci 0000:00:00.0: PCI bridge to [bus 01-01]
+pci 0000:00:00.0:   bridge window [io  disabled]
+pci 0000:00:00.0:   bridge window [mem disabled]
+pci 0000:00:00.0:   bridge window [mem pref disabled]
+vgaarb: loaded
+SCSI subsystem initialized
+usbcore: registered new interface driver usbfs
+usbcore: registered new interface driver hub
+usbcore: registered new device driver usb
+cfg80211: Calling CRDA to update world regulatory domain
+Switching to clocksource timer1
+NET: Registered protocol family 2
+IP route cache hash table entries: 2048 (order: 1, 8192 bytes)
+TCP established hash table entries: 8192 (order: 4, 65536 bytes)
+TCP bind hash table entries: 8192 (order: 4, 65536 bytes)
+TCP: Hash tables configured (established 8192 bind 8192)
+TCP reno registered
+UDP hash table entries: 128 (order: 0, 4096 bytes)
+UDP-Lite hash table entries: 128 (order: 0, 4096 bytes)
+NET: Registered protocol family 1
+RPC: Registered named UNIX socket transport module.
+RPC: Registered udp transport module.
+RPC: Registered tcp transport module.
+RPC: Registered tcp NFSv4.1 backchannel transport module.
+L2cache cache controller enabled
+VFS: Disk quotas dquot_6.5.2
+Dquot-cache hash table entries: 1024 (order 0, 4096 bytes)
+JFFS2 version 2.2. (NAND) © 2001-2006 Red Hat, Inc.
+fuse init (API version 7.16)
+SGI XFS with security attributes, large block/inode numbers, no debug enabled
+msgmni has been set to 429
+Block layer SCSI generic (bsg) driver version 0.4 loaded (major 254)
+io scheduler noop registered
+io scheduler deadline registered (default)
+io scheduler cfq registered
+brd: module loaded
+loop: module loaded
+ahci: SSS flag set, parallel bus scan disabled
+ahci ahci.0: AHCI 0001.0200 32 slots 2 ports 3 Gbps 0x3 impl platform mode
+ahci ahci.0: flags: ncq sntf stag pm led clo only pmp pio slum part ccc sxs boh
+scsi0 : ahci_platform
+scsi1 : ahci_platform
+ata1: SATA max UDMA/133 mmio [mem 0x10080000-0x1008ffff] port 0x100 irq 68
+ata2: SATA max UDMA/133 mmio [mem 0x10080000-0x1008ffff] port 0x180 irq 68
+Spi id table Version 1.22
+Hisilicon Spi Flash Controller V300 Device Driver, Version 1.10
+Spi(cs1) ID: 0x01 0x40 0x15 0x01 0x40 0x15
+Spi(cs1): Block:64KB Chip:2MB (Name:S25FL216K)
+1 cmdlinepart partitions found on MTD device hi_sfc
+Creating 1 MTD partitions on "hi_sfc":
+0x000000000000-0x000000200000 : "boot"
+Special nand id table Version 1.35
+Hisilicon Nand Flash Controller V301 Device Driver, Version 1.10
+Nand ID: 0x01 0xF1 0x00 0x1D 0x01 0xF1 0x00 0x1D
+Nand(Hardware): Block:128KB Page:2KB Chip:128MB OOB:64B ECC:1bit
+NAND device: Manufacturer ID: 0x01, Chip ID: 0xf1 (AMD NAND 128MiB 3,3V 8-bit)
+4 cmdlinepart partitions found on MTD device hinand
+Creating 4 MTD partitions on "hinand":
+0x000000000000-0x000000800000 : "kernel"
+0x000000800000-0x000001800000 : "rootfs"
+0x000001800000-0x000005800000 : "user"
+0x000005800000-0x000007800000 : "hdr000000"
+Fixed MDIO Bus: probed
+sky2: driver version 1.28
+PPP generic driver version 2.4.2
+PPP Deflate Compression module registered
+PPP BSD Compression module registered
+PPP MPPE Compression module registered
+NET: Registered protocol family 24
+usbmon: debugfs is not available
+usbcore: registered new interface driver cdc_acm
+cdc_acm: USB Abstract Control Model driver for USB modems and ISDN adapters
+usbcore: registered new interface driver cdc_wdm
+Initializing USB Mass Storage driver...
+usbcore: registered new interface driver usb-storage
+USB Mass Storage support registered.
+usbcore: registered new interface driver ums-alauda
+usbcore: registered new interface driver ums-datafab
+usbcore: registered new interface driver ums-freecom
+usbcore: registered new interface driver ums-isd200
+usbcore: registered new interface driver ums-jumpshot
+usbcore: registered new interface driver ums-sddr09
+usbcore: registered new interface driver ums-sddr55
+ata1: SATA link down (SStatus 0 SControl 300)
+usbcore: registered new interface driver mdc800
+mdc800: v0.7.5 (30/10/2000):USB Driver for Mustek MDC800 Digital Camera
+usbcore: registered new interface driver usbserial
+USB Serial support registered for generic
+usbcore: registered new interface driver usbserial_generic
+usbserial: USB Serial Driver core
+USB Serial support registered for GSM modem (1-port)
+usbcore: registered new interface driver option
+option: v0.7.2:USB Driver for GSM modems
+USB Serial support registered for pl2303
+usbcore: registered new interface driver pl2303
+pl2303: Prolific PL2303 USB to serial adaptor driver
+mousedev: PS/2 mouse device common for all mice
+usbcore: registered new interface driver usbhid
+usbhid: USB HID core driver
+TCP cubic registered
+Initializing XFRM netlink socket
+NET: Registered protocol family 10
+IPv6 over IPv4 tunneling driver
+NET: Registered protocol family 17
+NET: Registered protocol family 15
+lib80211: common routines for IEEE802.11 drivers
+Registering the dns_resolver key type
+VFP support v0.3: implementor 41 architecture 3 part 30 variant 9 rev 4
+registered taskstats version 1
+�ata2: SATA link up 1.5 Gbps (SStatus 113 SControl 300)
+ata2.15: Port Multiplier 1.2, 0x197b:0x0325 r0, 5 ports, feat 0x5/0xf
+ata2.00: hard resetting link
+ata2.00: failed to resume link (SControl 0)
+ata2.00: SATA link down (SStatus 0 SControl 0)
+ata2.01: hard resetting link
+ata2.01: failed to resume link (SControl 0)
+ata2.01: SATA link down (SStatus 0 SControl 0)
+ata2.02: hard resetting link
+ata2.02: SATA link up 1.5 Gbps (SStatus 113 SControl 310)
+ata2.03: hard resetting link
+ata2.03: failed to resume link (SControl 0)
+ata2.03: SATA link down (SStatus 0 SControl 0)
+ata2.04: hard resetting link
+ata2.04: failed to resume link (SControl 0)
+ata2.04: SATA link down (SStatus 0 SControl 0)
+ata2.02: ATA-9: WDC WD10EURX-63C57Y0, 01.01A01, max UDMA/133
+ata2.02: 1953525168 sectors, multi 0: LBA48 NCQ (depth 31/32)
+ata2.02: configured for UDMA/133
+ata2: EH complete
+scsi 1:2:0:0: Direct-Access     ATA      WDC WD10EURX-63C 01.0 PQ: 0 ANSI: 5
+sd 1:2:0:0: [sda] 1953525168 512-byte logical blocks: (1.00 TB/931 GiB)
+sd 1:2:0:0: Attached scsi generic sg0 type 0
+sd 1:2:0:0: [sda] 4096-byte physical blocks
+sd 1:2:0:0: [sda] Write Protect is off
+sd 1:2:0:0: [sda] Write cache: enabled, read cache: enabled, doesn't support DPO or FUA
+ sda: sda1
+sd 1:2:0:0: [sda] Attached SCSI disk
+yaffs: dev is 32505858 name is "mtdblock2" rw
+yaffs: passed flags ""
+VFS: Mounted root (yaffs2 filesystem) on device 31:2.
+Freeing init memory: 196K
+
+            _ _ _ _ _ _ _ _ _ _ _ _
+            \  _  _   _  _ _ ___
+            / /__/ \ |_/
+           / __   /  -  _ ___
+          / /  / /  / /
+  _ _ _ _/ /  /  \_/  \_ ______
+___________\___\__________________
+
+[RCS]: /etc/init.d/S00devs
+[RCS]: /etc/init.d/S01udev
+Jan  1 00:00:12 udevd (626): /proc/626/oom_adj is deprecated, please use /proc/626/oom_score_adj instead.
+udevd[626]: main: error opening /dev/null: No such file or directory
+[RCS]: /etc/init.d/S80network
+[RCS]: /etc/init.d/S81toe
+yaffs: dev is 32505859 name is "mtdblock3" rw
+yaffs: passed flags ""
+yaffs: dev is 32505860 name is "mtdblock4" rw
+yaffs: passed flags ""
+STMMAC driver:
+	platform registration... current version 201206191703
+	done!
+Set system config register 0x200300ec with value 0x003f003f
+	done!
+	done!
+	DWMAC1000 - user ID: 0x10, Synopsys ID: 0x36
+	Enhanced descriptor structure
+MACADDR in get is 0:0:0:0:0:0
+	no valid MAC address for MAC 1;please, use ifconfig or nwhwconfig!
+	eth0 - (dev. name: stmmaceth - id: 0, IRQ #119
+	IO base addr: 0xce9c4000)
+STMMAC MII Bus: probed
+eth0: PHY ID 001cc912 at 1 IRQ -6 (1:01) active
+	DWMAC1000 - user ID: 0x10, Synopsys ID: 0x36
+	Enhanced descriptor structure
+MACADDR in get is 0:0:0:0:0:0
+	no valid MAC address for MAC 0;please, use ifconfig or nwhwconfig!
+	eth1 - (dev. name: stmmaceth - id: 0, IRQ #119
+	IO base addr: 0xce9c0000)
+eth1: PHY ID 001cc912 at 1 IRQ -6 (1:01)
+stmmac_reset: RESET COMPLETE!
+
+**************************************************
+*  TNK driver built on Jun 19 2012 at 17:11:50
+*  TNK driver mode is BYPASS
+**************************************************
+stmmac: Rx Checksum Offload Engine supported
+stmmac: Rx Checksum Offload Engine supported
+ehci_hcd: USB 2.0 'Enhanced' Host Controller (EHCI) Driver
+hiusb-ehci hiusb-ehci.0: HIUSB EHCI
+hiusb-ehci hiusb-ehci.0: new USB bus registered, assigned bus number 1
+hiusb-ehci hiusb-ehci.0: irq 63, io mem 0x100b0000
+hiusb-ehci hiusb-ehci.0: USB 0.0 started, EHCI 1.00
+hub 1-0:1.0: USB hub found
+hub 1-0:1.0: 2 ports detected
+ohci_hcd: USB 1.1 'Open' Host Controller (OHCI) Driver
+hiusb-ohci hiusb-ohci.0: HIUSB OHCI
+hiusb-ohci hiusb-ohci.0: new USB bus registered, assigned bus number 2
+hiusb-ohci hiusb-ohci.0: irq 64, io mem 0x100a0000
+hub 2-0:1.0: USB hub found
+hub 2-0:1.0: 2 ports detected
+No need to recovery program from USB
+*** Board tools : ver0.0.1_20060106  ***
+[debug]: {source/utils/cmdshell.c:166}cmdstr:himm
+0x200f004c: 0x00000001 --> 0x00000000
+current used product type 4hd
+SDK_TYPE type is 4hd
+current system used mem=224M
+Hisilicon Media Memory Zone Manager
+hi3531_base: module license 'Proprietary' taints kernel.
+Disabling lock debugging due to kernel taint
+usb 1-1: new high speed USB device number 2 using hiusb-ehci
+Hisilicon UMAP device driver interface: v3.00
+load sys.ko for Hi3531...OK!
+Load tde.ko ...OK!
+load group.ko success.
+scsi2 : usb-storage 1-1:1.0
+load rc.ko ....OK!
+load mpeg4e.ko success.
+load vou.ko ....OK!
+load vpss.ko ....OK!
+load region.ko ....OK!
+load vda.ko ....OK!
+load vdec.ko ....OK
+load vhd firmware.ko OK
+load hdmi.ko ....OK!
+Load jpeg6b.ko success.		(SDK_VERSION:[jpeg6bv1.0] Build Time:[Aug 29 2012, 11:56:52])
+i2c version : 201212270927
+current chip numbers = 0
+insmod: can't insert 'extdrv/nvp1918.ko': Operation not permitted
+nc1108 module 201301231903
+nvp1108 0x60 get chip id 77 init ok !
+++++++++g_chip_type = 0
+2408  rtc Device Driver 201203081801 v1.0.0
+Hisilicon Watchdog Timer: 0.01 initialized. default_margin=60 sec (nowayout= 0, nodeamon= 0)
+current watchdog version 201206151658
+keybaord gpio init version : 201207021137
+HISI_IRDA-MF @Hi3520v100R001_C_0_2_0 2011-04-29 14:05:20
+hiir: init ok. ver 201206151658 =Jun 16 2012, 17:05:48.
+version:2012030908580+->TD3515
+TVT 35xx CryptoMemory Device Driver v1.0.0: Mar  9 2012 09:30:34
+Kernel: ssp initial ok!
+modprobe: chdir(/lib/modules): No such file or directory
+rm: can't remove '/mnt/mtd/preupgrade.sh': No such file or directory
+rm: can't removeMACADDR in set is 0:18:ae:3c:a2:49
+ '/mnt/mtd/produADDRCONF(NETDEV_UP): eth0: link is not ready
+ctcheck': No such file or directory
+Auto login as root ...
+(none) login: scsi 2:0:0:0: Direct-Access     Corsair  Flash Voyager    1100 PQ: 0 ANSI: 0 CCS
+sd 2:0:0:0: [sdb] 15728640 512-byte logical blocks: (8.05 GB/7.50 GiB)
+sd 2:0:0:0: [sdb] Write Protect is off
+sd 2:0:0:0: [sdb] No Caching mode page present
+sd 2:0:0:0: [sdb] Assuming drive cache: write through
+sd 2:0:0:0: Attached scsi generic sg1 type 0
+sd 2:0:0:0: [sdb] No Caching mode page present
+sd 2:0:0:0: [sdb] Assuming drive cache: write through
+ sdb: sdb1
+sd 2:0:0:0: [sdb] No Caching mode page present
+sd 2:0:0:0: [sdb] Assuming drive cache: write through
+sd 2:0:0:0: [sdb] Attached SCSI removable disk
+PUB_common.cpp, 1917, pid = 1048, tid=1067
+xdvr.cpp, 561, pid = 1048, tid=1048
+check OK!
+LocalDevice.cpp,3939,old crytoinfo
+#############xdvr.cpp,584,productID:10680
+current flash param ==
+------get 1------current param type == 4067
+productID:10680,subProductID:0
+xdvr.cpp,604,programeId:0,subProductID:0.xdvr.cpp,637,g_bProIdequeSubProdID:1
+######################xdvr.cpp,656,no change CVBS Resolution
+hdtype=0
+------get 1------current param type == 4066
+product Item (Product.cpp,381)from programe
+------get 1------current param type == 4068
+------get 1------current param type == 4073
+------get 1------current param type == 4072
+------get 1------current param type == 4071
+LocalDevice.cpp,3885,GetKeyBoardNameFromFlash:Q7
+xdvr.cpp,711,ChangeKeyBoardType keyboardType:0
+xdvr.cpp,724,local keyboardtype;0
+Intial CLanguagePack succ!
+------get 1------current param type == 4070
+Initial ReadDDdns ok
+GetVideoFormatFromFlash:LocalDevice.cpp:3656, Get video format from flash
+------get 1------current param type == 4069
+Inital config manager succ
+ConfigEx.cpp,2124, first check NCFG_ITEM_ENCODE_MAJOR maxRate:960,totalRate:960
+ ConfigEx.cpp,2128, no need change NCFG_ITEM_ENCODE_MAJOR
+##xdvr.cpp,1045,videoout res flash == config
+AdjustCVBSVo:LocalDevice.cpp:4267, dislW=720, dispH=480
+change cvbs output size 720,480
+Mcu8952.cpp, 412, pid = 1048
+can not start the MCU serial port.: Success
+Start():Mcu8952.cpp:697
+------get 1------current param type == 4083
+------get 1------current param type == 4084
+current read param in kernel version 0 = 5091eb04, 1 = 513d503c, 2 = 5091ef22
+ DVR SDK VERSION : *** Jun 15 2013 11:15:37 ***
+ DVR SDK VERSION : *** 201306151103 ***
+current alloc buf variant len = 2888600
+current jiffts value = 100
+alloc master pb buf addr = 417d7008, 8388608, 8388608
+alloc master compress buf addr 41fd7008, 30408704, 26214400
+alloc master playback audio dec buf addr 43cd7008, 8192
+alloc master audio enccode buf addr 43cd9008, 327680
+current slave mem len is ++++++------- 0
+all used mem len m: 39133184, s: 0, total 39133184
+all maoc mem len m: 41943040, s: 0, total 41943040
+current jpeg set vale = 1
+
+alloc var buffer add 44dfb008, len 3186056, PCIV_FONT_DOT_PARAM = 2141268
+Current 2704XD_P
+ DVR Product Param Init
+current decode chip number = 1
+open /dev/nvp1114adev success
+=============> nvp1108 set video mode [1] clk 0
+nvp1108 0x60 get chip id 77 init ok !
+warning: nvp1108 0x62 i2c_read err !!!
+warning: nvp1108 0x64 i2c_read err !!!
+warning: nvp1108 0x66 i2c_read err !!!
+drv:set playback audio channel ok
+current device system version HI_VERSION=Hi3531_MPP_V1.0.7.3 Debug
+version info : 1.0.7.3 --- 7  ++ 1.0.7.3 Debug
+current system has pci device cnt 1, sdkv 0
+start vi vo device ......
+current chip workmode = 77777777, 55
+vo device b_vga_mod= 1, b_cpu_slave= 0, b_vo_doub_frm= 0
+vo device b_cas_pciv_mode= 0, b_used_cas_dual= 0
+vo device b_used_wbc= 1, vo_wbc_bind_dev= 2
+vo device VoMsk= e, b_pal= 0, b_cascade_master= 0
+vo device b_used_pip= 1, vo_pip_bind_dev= 1
+vo device iWorkMode= 77777777, vo_img_width= 800, vo_img_height= 600, product_type= 2704
+current device start hdmi ..................
+hdmi start force mode =-----------> HI_HDMI_FORCE_HDMI
+HDMI start success.
+ PipLayer Bind Dev pciv_stream.c,2944
+ Get PipLayer Attr pciv_stream.c,2953
+ Set PipLayer Attr pciv_stream.c,2969
+ Enable PipLayer Attr pciv_stream.c,2978
+ End PipLayer Attr pciv_stream.c,2987
+init channel param ----------
+start vi channel ......
+PUBF_SetVideolossPic====>
+enable no interrup detect
+PUBF_SetVideolossPic====>
+enable no interrup detect
+PUBF_SetVideolossPic====>
+enable no interrup detect
+PUBF_SetVideolossPic====>
+enable no interrup detect
+start venc group ......
+start venc net group .....
+start venc local ......
+start venc net ......
+start vdec ......
+start cascade vi ......
+start tde ......
+start framebuf G4 ......
+current set fb width 800, height 600
+fb width 800, height 600, len 8294400, 1600
+start framebuf HC0 ......
+current set fb width 32, height 32
+fb width 32, height 32, len 131072, 128
+sdvr initialize success
+ *** Beging RAInitResamplerRat ***
+ *** Beging RAInitResamplerRat ***
+thread_route_pci_main_video_encode, thread id = 1083
+thread_route_pci_net_video_encode, thread id = 1084
+thread_vedio_loss_check, thread id = 1086
+thread_route_encode_video_net_device, thread id = 1087
+thread_route_audio_capture, thread id = 1088
+thread_route_video_playbck, thread id = 1089
+thread_route_video_pb_local, thread id = 1090
+thread_route_audio_playget time is:38-08-21 7 05:55:80
+back, thread id = 1091
+thread_route_vda_md, thread id = 1092
+thread_route_check_other_thread, thread id = 1093
+thread_route_mouse_process, thread id = 1094
+thread_route_capture_jpeg, thread id = 1095
+thread_route_slave_cpu_check_time, thread id = 1096
+thread_route_encode_video_local_device, thread id = 1085
+RTC Time:26-8-15 5:37:50
+##read chip type:16385  is 1108
+Initial local device succ!
+fb w = 800, h = 600
+The mem is :960000
+The line_length is :1600
+The xres is :800
+The yres is :600
+bits_per_pixel is :16
+Start flash screen ok!
+------get 1------current param type == 4065
+xdvr.cpp, 321, pid = 1048, tid = 1097 start flash screen.
+macflash:00:18:ae:3c:a2:49
+macfile:00:18:ae:3c:a2:49
+videoflash:0
+videofile:0
+------get 1------current param type == 4075
+insert master vi chn  4 0 user pic u32ChnFrmRate = 0
+insert master vi chn  8 0 user pic u32ChnFrmRate = 0
+insert master vi chn  0 0 user pic u32ChnFrmRate = 0
+insert master vi chn  12 0 user pic u32ChnFrmRate = 0
+Initial message man succ
+cur language is in language list
+MainFrame.cpp,8690,start dog
+MainFrame.cpp,8720,set chnn:0, waterMack
+MainFrame.cpp,8720,set chnn:1, waterMack
+MainFrame.cpp,8720,set chnn:2, waterMack
+MainFrame.cpp,8720,set chnn:3, waterMack
+MainFrame.cpp,8723,kill dog
+Setup warter mark
+CDOperationMan.cpp,58
+Initial CD-Rom man succ
+dvrId:0018ae3ca2490000
+Initial diskmanager succ
+Initial reclog manager succ
+Initial log manager succ
+Inital record manager succ
+Initial smtp manager succ
+Initial m_pSnapPictureMan manager succ
+Inital stream proc succ
+Inital data server proc succ
+Inital netReader succ
+Initial backupman succ
+Initial smtp manager succ
+Initial alarm out manager succ
+Initial motion manager succ
+Initial sensor in manager succ
+Initial video loss manager succ
+Initial video loss manager succ
+Initial alarm manager succ
+Initial ptz manager succ
+Initial fake curise succ
+Initial pinyin input succ
+Initial display man succ
+Initial UpnpMan man succ
+Initial config set manager succ
+Initial():MainFrame.cpp:818, initial the alloc NIC IP succ
+Initial():MainFrame.cpp:842, initial the DDNS manager succ
+ReclogManEx.cpp,1214,diskSize:128
+@@@@@@ConfigSetMan.cpp,695, Initial CMessageMan::Instance()->SetChannelVisible:1
+@@@@@@ConfigSetMan.cpp,696, Initial m_pLocalDeviceMan->SetCamVisible:1
+AdjustCVBSVo:LocalDevice.cpp:4267, dislW=720, dispH=480
+change cvbs output size 720,480
+cur setting cvbs out image size 720,480
+set chnn:00 local rate:30, encode:2, bitstream:10240, quality:5
+set chnn:01 local rate:30, encode:2, bitstream:10240, quality:5
+set chnn:02 local rate:30, encode:2, bitstream:10240, quality:5
+set chnn:03 local rate:30, encode:2, bitstream:10240, quality:5
+set chnn:00 net    rate:30, encode:2, bitstream:768, quality:5
+set chnn:01 net    rate:30, encode:2, bitstream:768, quality:5
+set chnn:02 net    rate:30, encode:2, bitstream:768, quality:5
+set chnn:03 net    rate:30, encode:2, bitstream:768, quality:5
+ConfigSetMan.cpp,2583,NCFG_ITEM_JPEG_PERIOD:2
+ConfigSetMan.cpp,2590,NCFG_ITEM_JPEG_SIZE:2
+ConfigSetMan.cpp,2615,NCFG_ITEM_JPEG_QUALITY:4 ==> 3
+ConfigSetMan.cpp,2623,NCFG_ITEM_JPEG_SNAP_NUM:3
+########SmtpMan.cpp,534,m_snapImgNum:3
+begin check++++++++++++ tssssssssss
+route: SIOCADDRT: File exists
+CMD : route add -net 224.0.0.0 netmask 240.0.0.0 dev eth0 execute fail
+route: SIOCADDRT: File exists
+CMD : route add -net 224.0.0.0 netmask 240.0.0.0 dev eth0 execute fail
+########SmtpMan.cpp,550,m_bSnapImg:0
+EffecCruiseCfg:ConfigSetMan.cpp:2748, set the curise
+EffecCruiseCfg:ConfigSetMan.cpp:2748, set the curise
+EffecCruiseCfg:ConfigSetMan.cpp:2748, set the curise
+EffecCruiseCfg:ConfigSetMan.cpp:2748, set the curise
+Setup config succ
+Initial main frame succ
+disknum=1
+------get 1------current param type == 4066
+Initial network Server succ
+xdvr.cpp,1751,host:192.168.3.123,dwPort:10002,ID:382
+Initial Web Server succ
+SetExKeyboardType:ExternalKeyboard.cpp:106, The external 485 keyboard is TVT_MY1003
+Start device succ
+entry while clear buf ............
+DVRTimer.cpp, 198, Timer thread pid = 1048, tid=1118
+RecordMan.cpp, 992, pid = 1048, tid=1119
+MainFrame.cpp, 1724, pid = 1048, tid=1117
+ExternalKeyboard.cpp, 136, pid = 1048, tid=1116
+end while clear buf ............
+ clear buffer ------------------ end
+StreamProc.cpp,292,PUB_CreateThreadEx(StreamThread, (void *)this, &m_bStream, 50);
+Start:MainFrame.cpp:1358, Start upnpMan sucss
+Start main frame succ
+SmtpMan.cpp,1141,SendMailThread pid=1048, tid=1125
+set chnn:00 local rate:30, encode:2, bitstream:10240, quality:5
+FakeCurise.cpp, 242, pid = 1048, tid=1126
+DisplayMan.cpp, 1779, pid = 1048, tid=1129
+StreamProc.cpp, 645, pid = 1048, tid=1120
+StreamProc.cpp, 912, pid = 1048, tid=1121
+StreamProc.cpp, 1359, pid = 1048, tid=1122
+DataSerProc.cpp, 125, pid = 1048, tid=1123
+NetReader.cpp, 568, pid = 1048, tid=1124
+DdnsManager.cpp, 579, pid = 1048, tid=1130
+MainFrame.cpp, 8330, pid = 1048, tid=1132
+set chnn:01 local rate:30, encode:2, bitstream:10240, quality:5
+MainFrame.cpp, 8138, feed dog pid = 1048, tid=1134
+set chnn:02 local rate:30, encode:2, bitstream:10240, quality:5
+UpnpMan.cpp 453 upnp man pid = 1048
+MainFrame.cpp, 8613, pid = 1048, tid=1133
+MainFrame.cpp, 8255, timer pid = 1048, tid = 1131
+AlarmMan.cpp, 133, pid = 1048, tid=1127
+AlarmMan.cpp, 269, pid = 1048, tid=1128
+set chnn:03 local rate:30, encode:2, bitstream:10240, quality:5
+Start network Server succ
+Start Web Server succ
+1761 xdvr
+webserver.cpp, 1436, pid = 1048, tid=1142
+webserver.cpp, 1174, pid = 1048, tid=1143
+webserver.cpp, 1325, pid = 1048, tid=1141
+NetServer.cpp, 2596, pid = 1048, tid=1140
+NetServer.cpp, 730, pid = 1048, tid=1139
+SWL_ListenProcEx.cpp, 137, pid = 1048, tid=1138
+NetServer.cpp, 899, pid = 1048, tid=1136
+SWL_MultiNetComm.cpp, 620, pid = 1048, tid=1137
+Start local window succ
+------get 1------current param type == 4066
+StreamProc.cpp,1729, maxCopies:8,m_secondRateLimit:-1
+StreamProc.cpp,1735, m_secondSendAllNum:0,maxCopies:8
+set chnn:00 net    rate:1, encode:2, bitstream:768, quality:5
+set chnn:01 net    rate:1, encode:2, bitstream:768, quality:5
+set chnn:02 net    rate:1, encode:2, bitstream:768, quality:5
+set chnn:03 net    rate:1, encode:2, bitstream:768, quality:5
+###@@@@@@@@@@@#######Product.cpp,16524,
+kernelVersion:CB13-D3B3-CB13,
+hardwareVersion:10680.0.14.Q7-v1.2-31xx,
+MCUVersion:10.04.23,
+mac:018ae3ca249
+LocalDevice.cpp,1227, ext_set_voutdev_color,br:96,co:148,sa:122,hu:128
+LocalUIMan.cpp, 258, pid = 1048, tid=1144
+xdvr.cpp, 539, pid = 1048, end flash screen.
+Stop flash screen!
+##############MainFrame.cpp,8238, SetLcdScreemStatus:1
+LocalDevice.cpp,967,open chnn:0 live audio,ok
+set audio channel live === 0
+ aenc get stream cnt 4,49
+setAudioAuto:1
+Set do dwell enable=0.
+
+
+(none) login: (none) login:
+
+(none) login: (none) login: root
+
+Password:
+Aug 15 05:39:18 login[1045]: root login on 'ttyS000'
+Welcome to HiLinux.
+None of nfsroot found in cmdline.
+~ #
+~ #

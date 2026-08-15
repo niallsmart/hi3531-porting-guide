@@ -102,6 +102,159 @@ transmitter is fitted — drivers for all three ship in the filesystem but none
 is loaded, and the corresponding functions come from the SoC itself. See
 [12-video-output.md](12-video-output.md) and [13-audio.md](13-audio.md).
 
+## Where the product identity lives
+
+The internal code `2704XD_P` is a string compiled into **`libhi3531.so`**, in
+the message `Current 2704XD_P DVR Product Param Init`, with a matching function
+symbol `PCIV_ProgParam_DVR2704XD_P_Iniit` (TVT's typo). It is one of **29**
+such per-model initialisation routines in the same library:
+
+```
+2704XD_P    2708XD_P    2708XE_M   2708XE_MH  2708XE_S   2716XD_P
+NVR08LD     NVR08PE_M   NVR16LD    NVR16ND_M  NVR28XX Z
+TD_4503D_A  TD2404MD_B  TD2408MD_B TD2416MD_B
+TD2504HD_C  TD2508HD_C  TD2508HE_B TD2508HE_C TD2508HE_N100B
+TD2516HD_C  TD2516HE_B  TD2516HE_C TD2516HE_N100B
+TD2524HD_C  TD2524HE_B  TD2532HD_C TD2532HE_B  TD2616IPIN
+```
+
+One library carries parameter initialisation for 29 DVR and NVR products and
+selects one at run time, through `PUBF_SysSetCurProductType` and
+`xvfunc_get_product_info_change_param`, which pass a `product_type` integer.
+`libhi3531.so` in `rootfs/mtd/` is byte-identical to the copy in the `user`
+partition backup.
+
+### What selects it: a flash parameter
+
+The application reads a numeric product ID from a flash parameter block at
+startup and resolves it to the model. From the boot console capture,
+`doc/bootlog.txt`:
+
+```
+current flash param ==
+------get 1------current param type == 4067
+productID:10680,subProductID:0
+...
+vo device ... product_type= 2704
+Current 2704XD_P
+ DVR Product Param Init
+```
+
+So the chain is:
+
+| Step | Value |
+|---|---|
+| Flash parameter type `4067` | `productID:10680`, `subProductID:0` |
+| resolves to numeric type | `product_type = 2704` |
+| selects the routine | `PCIV_ProgParam_DVR2704XD_P_Iniit` in `libhi3531.so` |
+| which prints | `Current 2704XD_P DVR Product Param Init` |
+
+The application reads roughly twenty parameter types in the range `4065`–`4084`
+through the same interface. **Which flash region holds them is unknown.** The
+SPI-NOR board parameter block at `0xBF000` (see
+[04-flash-storage.md](04-flash-storage.md)) is the likely candidate; the
+capture shows the read but not its source.
+
+### The composite identity string
+
+Printed by `Product.cpp` late in startup:
+
+```
+kernelVersion:CB13-D3B3-CB13,
+hardwareVersion:10680.0.14.Q7-v1.2-31xx,
+MCUVersion:10.04.23,
+mac:018ae3ca249
+```
+
+`hardwareVersion` decomposes as:
+
+| Field | Value | Also appears as |
+|---|---|---|
+| `10680` | product ID | flash parameter `4067`, above |
+| `0` | sub-product ID | `subProductID:0` |
+| `14` | — | **unidentified** |
+| `Q7` | keyboard type | `GetKeyBoardNameFromFlash:Q7` |
+| `v1.2` | board revision | `DHB_AX V1.2` silkscreen and the `v1.2` string in the SPI-NOR board parameter block |
+| `31xx` | SoC family | Hi3531 |
+
+The MAC is absent at kernel level — the boot log shows `no valid MAC address`
+for both interfaces — and is applied later by the application from flash
+(`macflash:00:18:ae:3c:a2:49`), which also derives `dvrId:0018ae3ca2490000`.
+
+### Build provenance
+
+From the same capture:
+
+| Component | Evidence |
+|---|---|
+| Kernel builder | `lzg@localhost.localdomain` |
+| Toolchain | gcc 4.4.1, `Hisilicon_v100(gcc4.4-290+uclibc_0.9.32.1+eabi+linuxpthread)` |
+| Kernel build | `#20121101111407 SMP Mon Mar 11 11:23:32 CST 2013` |
+| U-Boot | `Nov 01 2012 - 11:21:03`, matching `current auto update version : 201211011107` |
+| MPP | `Hi3531_MPP_V1.0.7.3 Debug`, Aug 2012 |
+| TVT application layer | `DVR SDK VERSION : *** Jun 15 2013 11:15:37 ***` / `*** 201306151103 ***` |
+
+Three version timelines run separately: HiSilicon's MPP (Aug 2012), the kernel
+and U-Boot (Nov 2012 build ID, kernel linked Mar 2013), and TVT's application
+layer (Jun 2013).
+
+### Source filenames
+
+The application logs `file.cpp,line` on most operations, exposing its source
+tree: `xdvr.cpp`, `LocalDevice.cpp`, `Product.cpp`, `MainFrame.cpp`,
+`ConfigEx.cpp`, `ConfigSetMan.cpp`, `Mcu8952.cpp`, `StreamProc.cpp`,
+`NetServer.cpp`, `webserver.cpp`, `SWL_ListenProcEx.cpp`,
+`SWL_MultiNetComm.cpp`, `ExternalKeyboard.cpp`, `PUB_common.cpp`,
+`ReclogManEx.cpp`, `CDOperationMan.cpp`, `DdnsManager.cpp`, `UpnpMan.cpp`,
+`SmtpMan.cpp`, `AlarmMan.cpp`, `DisplayMan.cpp`, `FakeCurise.cpp`,
+`DVRTimer.cpp`, `RecordMan.cpp`, `DataSerProc.cpp`, `NetReader.cpp`,
+`LocalUIMan.cpp`, `pciv_stream.c`.
+
+C++ with an MFC-influenced structure. `xdvr.cpp`, `SWL_MultiNetComm.cpp` and
+`ReclogManEx.cpp` are distinctive enough to be worth searching directly when
+hunting for leaked or GPL-released source.
+
+`Mcu8952.cpp` names the front-panel MCU: 8952 is the AT89S52 documented in
+[20-front-panel-mcu.md](20-front-panel-mcu.md).
+
+### `/mnt/mtd/product/product.def` describes a different product
+
+The text manifest declares:
+
+```
+PRODUCT_NAME       = "TD_2316ME"
+VIDEO_INPUT_NUM    = "16"
+VIDEO_OUT_DEVICE   = "VGA,CVBS"
+VIDEO_SIZE_MASK    = "D1,CIF"
+RESOLUTION_MASK    = "640X480,800X600,1024X768,1280X1024"
+```
+
+That is a 16-channel **standard definition** DVR with no HDMI. This unit is a
+4-channel 1080p DVR with HDMI. `TD_2316ME` appears nowhere in `libhi3531.so`'s
+product table, so the manifest and the compiled table are separate systems and
+the manifest is not what selects the running identity. `td3531` does contain
+the path string `./product/product.def`, so it references the file, but a
+reference is not proof it is parsed. Treat the manifest as stale and the
+`libhi3531.so` table as authoritative.
+
+### Rebadging residue
+
+All 27 language files under `mtd/WebSites/language/` direct users to a
+different brand's support desk. From `english_us/string.js`:
+
+> "Lost or forgotten passwords will require assistance from **Q-see**
+> technical support to reset."
+
+`mtd/WebSites/logo/logo.js` leaves the branding blank (`g_bUseLogo = true`,
+`g_logoName = ""`). So this image was built for Q-See's product line and
+shipped in an LTS-branded chassis with the support contact unchanged.
+
+**Consequence for source hunting:** Q-See GPL releases and firmware archives
+are a live lead, plausibly a better one than TVT's own, since US-market
+rebadgers face more GPL compliance pressure than Shenzhen ODMs. Add `Q-See
+GPL` and `Q-See DVR source` to the search terms above. Which Q-See model
+corresponds to this board has not been established.
+
 ## Product model summary
 
 | Attribute | Value |

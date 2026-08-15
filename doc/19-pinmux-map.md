@@ -135,7 +135,9 @@ Reading across it:
   microcontroller over `ttyAMA1`, observed on the wire — see
   [20-front-panel-mcu.md](20-front-panel-mcu.md). Whether GPIO2_3 is physically
   wired to anything on this board is unknown; the vendor comment is the only
-  suggestion that it is, and the vendor disables it.
+  suggestion that it is, and the vendor disables it. The boot console capture
+  in `doc/bootlog.txt` shows `himm` echoing
+  both values as `dep2.sh` runs: `0x200f004c: 0x00000001 --> 0x00000000`.
 - `0x138` and `0x13c` (`SIO0_RCLK`, `SIO0_RFS`) read 0 under Linux even though
   the 4HD script writes 1 to both. Something after the script clears them;
   `SIO0_DIN` at `0x140` stays at 1.

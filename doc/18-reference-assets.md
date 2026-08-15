@@ -11,7 +11,7 @@ Where everything came from, and how to reproduce or extend it.
 | `backups/2026-08-03/` | SPI-NOR, NAND and filesystem images |
 | `pcb/` | Photographs of the board and rear connectors |
 | `datasheets/` | Local copies of datasheets for identified parts |
-| `doc/` | This documentation |
+| `doc/` | This documentation, plus `bootlog.txt` |
 
 ### SDK layout
 
@@ -114,6 +114,35 @@ See [04-flash-storage.md](04-flash-storage.md) for contents and geometry.
 `backups/2026-08-03/MANIFEST.md` carries SHA-256 for every file; each layer was
 read twice and compared, with a second copy on the Pi at
 `/home/niallsmart/dhb_ax/backups/2026-08-03/`.
+
+## Boot console capture
+
+`doc/bootlog.txt` — a single cold boot of the stock firmware, taken over the
+UART console at 115200 8N1 through the Pi:
+
+```sh
+ssh -t raspberrypi "picocom -b 115200 --omap crcrlf --logfile dvr.log /dev/serial0"
+```
+
+695 lines, running from the U-Boot banner through kernel boot, module loading
+and application startup to a root login. It is the source for the product
+identity chain and build provenance in
+[15-product-identity.md](15-product-identity.md), the `0x200f004c` transition
+in [19-pinmux-map.md](19-pinmux-map.md), the decoder probe result in
+[11-video-input.md](11-video-input.md), and the `godnet` machine ID in
+[03-boot-chain.md](03-boot-chain.md).
+
+Two capture conditions affect how it reads:
+
+- **A USB mass-storage device was attached** — a Corsair Flash Voyager, FAT32.
+  The drive and its `DHBAXBOOT` volume label both come from this project's own
+  tooling, so neither is vendor-derived; `DHBAXBOOT` does not appear in the
+  SPI-NOR image, and U-Boot does not match on the label. Attaching any USB
+  storage triggers the scan and the four `reading kern31` / `rootfs31` /
+  `appsf31` / `uboot31` lines. Those reads print no byte count and no error,
+  consistent with the files being absent from the drive.
+- **The front-panel MCU serial port failed to open** (`can not start the MCU
+  serial port.`), so the log is unrepresentative downstream of the MCU.
 
 ## PCB photographs
 
