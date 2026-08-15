@@ -188,10 +188,11 @@ Two behaviours to plan around:
 
 **Resume with `reset`.** Neither `boot` nor `run bootcmd` exists.
 
-## Recommended porting workflow
+## Loading a test kernel over TFTP
 
-Keep the vendor U-Boot initially. It already initialises DDR — which is the
-hardest part to reproduce — and it supports TFTP.
+The vendor U-Boot initialises DDR — the hardest part of bring-up to reproduce —
+and supports TFTP, so a kernel can be loaded and booted without writing
+anything.
 
 ```
 setenv serverip 192.168.4.34        # the Raspberry Pi
@@ -316,7 +317,7 @@ Adding `CONFIG_OF_LIBFDT` and `CONFIG_CMD_FDT` would provide the documented
 `bootm <kernel> - <dtb>` handoff and a `fdt` command. It requires writing a new
 bootloader to SPI-NOR, while an appended DTB works without flash writes.
 
-Only once a kernel boots reliably from TFTP should flashing be considered — and
-at that point a hardware flash programmer for recovery becomes important, since
-a bad SPI-NOR write bricks the board. Full flash backups exist in
+A bad SPI-NOR write bricks the board, so a hardware flash programmer for
+recovery matters before the first write — see
+[16-open-questions.md](16-open-questions.md). Full flash backups exist in
 `backups/2026-08-03/`.
