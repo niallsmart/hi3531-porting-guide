@@ -15,7 +15,7 @@ Evidence, all from the running device:
 | CryptoMemory driver banner | `TVT 35xx CryptoMemory Device Driver v1.0.0` |
 | Application version string | `version:2012030908580+->TD3515` |
 | Internal product code | `Current 2704XD_P` |
-| Board/product family | `DHB_AX` (used in the backup naming) |
+| PCB designation | `DHB_AX` — silkscreen only, absent from all firmware |
 
 **This matters for the port.** TVT-manufactured DVRs are sold under many brands
 (LTS, Q-See, Night Owl, Swann, and others), so:
@@ -70,6 +70,24 @@ rear I/O strip, with a manufacturing date code of `20130921` and UL marks
 `E343438` / `94V-0` / `3813` (week 38, 2013). The `V1.2` matches the `v1.2`
 string stored in the SPI-NOR parameter block — see
 [04-flash-storage.md](04-flash-storage.md).
+
+`DHB_AX` is TVT's designation for the PCB itself, not a product or model name.
+The string appears on the silkscreen and nowhere else: it is absent from the
+SPI-NOR image, the filesystem, `td3531`, `libhi3531.so` and the boot log. Only
+the revision crosses into software, as `v1.2` in the board parameter block and
+in the `hardwareVersion` string. The `_B` suffix on the rear I/O strip marks
+the second board of the set, revised on its own numbering.
+
+The product identity is carried separately, in flash — see
+[Where the product identity lives](#where-the-product-identity-lives). One PCB
+design would be expected to serve several SKUs, differentiated by component
+population and by the parameter block rather than by the layout, which would
+explain why the software never refers to the board. **That is inference from
+the string's absence**; a `DHB_AX` board from another TVT model carrying a
+different `productID` in the same parameter block layout would confirm it.
+
+What `DHB` abbreviates is unknown. No sibling designation appears anywhere in
+the available material.
 
 Also visible on the overview photograph: the RTC coin cell (BT1), a buzzer
 (BZ1), four "HUI KE" relays for alarm outputs, the Ethernet
@@ -262,7 +280,7 @@ corresponds to this board has not been established.
 | Retail brand and model | LTS LTD2704XE-P |
 | ODM | TVT Digital (Shenzhen) |
 | Internal product code | `2704XD_P` |
-| Board family | `DHB_AX`, revision V1.2 |
+| PCB designation | `DHB_AX`, revision V1.2 |
 | Application | `td3531` |
 | Channels | 4 video, 4 audio, 4 alarm |
 | Supply | DC 12 V |
