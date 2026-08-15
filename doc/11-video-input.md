@@ -307,20 +307,24 @@ meaning **no cameras were connected** at capture time.
 
 ## Assessment
 
-Not portable in any practical sense — but be precise about why, because one of
-the three obstacles turns out not to be one.
+The capture path has three elements, and they are blocked to different degrees.
 
-| Obstacle | Real? |
+| Element | Status |
 |---|---|
-| The Nextchip NVP1104B decoder | **Yes.** Only an overview document is public; no register map |
-| The Lattice FPGA bitstream | **Yes.** Custom, undocumented, no I²C address or register map recovered |
-| The SoC capture block | **No.** VICAP at `0x20580000` is fully documented — chapter 11.1 of the Hi3531 datasheet, with a register summary and roughly 85 pages of register descriptions |
+| The SoC capture block | **Documented.** VICAP at `0x20580000`, chapter 11.1 of the Hi3531 datasheet, with a register summary and roughly 85 pages of register descriptions |
+| The Nextchip NVP1104B decoder | **Undocumented, observable.** Only an overview document is public, with no register map. The initialisation sequence is recoverable from the I²C bus |
+| The Lattice FPGA | **Undocumented, observable.** No I²C address or register map recovered, and its bitstream is not host-loaded on this board. Its configuration writes are recoverable from the same bus |
 
-So the SoC side of video capture is programmable from the datasheet, and a
-V4L2 driver for VICAP is a normal, if large, driver-writing job. What blocks
-this board is everything *in front of* VICAP: the analogue decoder and the FPGA
-that reformats its output into BT.1120. Neither can be programmed without
-documentation nobody has.
+The SoC side is programmable from the datasheet, and a V4L2 driver for VICAP is
+a normal, if large, driver-writing job. The two chips in front of it have no
+public documentation, but both are configured over the bit-banged I²C bus by
+firmware that runs correctly on every boot, so what they need can be captured
+from a working system rather than derived from a datasheet. See
+[A possible route to capture on a modern kernel](#a-possible-route-to-capture-on-a-modern-kernel).
+
+Encoding is a separate matter: VEDU has no register documentation, so hardware
+H.264 remains reachable only through MPP. See
+[14-media-codec.md](14-media-codec.md).
 
 See
 [18-reference-assets.md](18-reference-assets.md#the-hi3531-datasheet--what-it-does-and-does-not-document)
