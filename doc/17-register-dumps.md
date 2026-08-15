@@ -33,10 +33,9 @@ address given. All of `himm`, `himd`, `himd.l` and `himc` are symlinks to one
 multi-call binary, `/bin/btools`; source is in the SDK at
 `osdrv/tools/board_tools/reg-tools-1.0.0/source/tools/`.
 
-To retake or extend these dumps, see
-[18-reference-assets.md](18-reference-assets.md) for the capture script, and
-remember to resume the board with **`reset`** — neither `boot` nor `run` exists
-in this U-Boot build, so `run bootcmd` fails silently-looking too.
+When retaking or extending these dumps, resume the board with **`reset`** —
+neither `boot` nor `run` exists in this U-Boot build, so `run bootcmd` fails
+silently-looking too.
 
 ## Pin multiplexing — IO_CONFIG at `0x200F0000`
 

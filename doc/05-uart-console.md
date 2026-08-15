@@ -152,9 +152,8 @@ the user is in the `dialout` group. The exact pin header location on the DVR
 board has not been documented — see
 [16-porting-roadmap.md](16-porting-roadmap.md).
 
-For scripted access, use the capture scripts described in
-[18-reference-assets.md](18-reference-assets.md); only one process may hold
-`/dev/serial0` at a time, so stop picocom before running them.
+Only one process may hold `/dev/serial0` at a time, so stop picocom before
+running anything else against the port.
 
 ## Notes for the port
 

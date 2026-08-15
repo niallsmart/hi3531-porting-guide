@@ -55,24 +55,6 @@ Applied with `sudo exportfs -ra`. The original was backed up to
 `/etc/exports.bak.<YYYYmmdd-HHMMSS>`; restore it and re-run `exportfs -ra` to
 reverse.
 
-### Added serial capture scripts
-
-Four Python scripts in the home directory, with their logs:
-
-| Script | Purpose | Output |
-|---|---|---|
-| `uboot_capture.py` | Interrupts U-Boot autoboot, runs `version` / `printenv` / `help` | `dvr-uboot.log`, `uboot_capture.out` |
-| `uboot_capture2.py` | Dumps pinmux / CRG / SYS_CTRL / DDR registers with `md` | `dvr-uboot2.log`, `uboot_capture2.out` |
-| `uboot_capture3.py` | `getinfo` subcommands, `usb tree`, boot-strap register | `dvr-uboot3.log`, `uboot_capture3.out` |
-| `uboot_capture4.py` | DRAM aliasing test | `dvr-uboot4.log`, `uboot_capture4.out` |
-
-All four try to resume the board with `run bootcmd`, which is **not a command
-in this U-Boot** — use `reset` instead if reusing them. See the pitfalls table
-in [18-reference-assets.md](18-reference-assets.md).
-
-Reverse by deleting the files. Nothing was installed system-wide and no service
-was created.
-
 ## Changes made (2026-08-13)
 
 ### Serial console logging with `cat`
