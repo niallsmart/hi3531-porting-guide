@@ -97,11 +97,11 @@ stop the inherited VOU pipelines for a headless system, or reserve
 `0xC1000000`–`0xC1046FFF` and expose it as a `simple-framebuffer`. See
 [the measured handoff configuration](12-video-output.md#u-boot-handoff).
 
-> **This node only survives if `CONFIG_ARM_ATAG_DTB_COMPAT` is off.** With it on,
-> the decompressor overwrites `/memory` with U-Boot's `ATAG_MEM` — one bank of
-> 256 MB, a compile-time constant rather than a probe — and applies the vendor
-> `bootargs`, which start `mem=224M`. Either alone puts you back where you
-> started. See
+> With `CONFIG_ARM_ATAG_DTB_COMPAT` enabled, the decompressor overwrites
+> `/memory` with U-Boot's incorrect single-bank `ATAG_MEM`. Disable compatibility
+> to use this node directly, or replace U-Boot's command line and pass
+> `mem=512M@0x80000000 mem=512M@0xc0000000`; the first `mem=` discards the ATAG
+> map and the pair recreates the measured banks. See
 > [getting a device tree into a modern kernel](03-boot-chain.md#getting-a-device-tree-into-a-modern-kernel).
 
 ### Evidence for the bank sizes

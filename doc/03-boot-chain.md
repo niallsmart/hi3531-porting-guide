@@ -206,8 +206,8 @@ See [raspberrypi-changes.md](raspberrypi-changes.md).
 
 Note `bootargs` is passed from the environment, so a test kernel can be given a
 different command line with `setenv bootargs ...` without a permanent change
-(avoid `saveenv`, which writes SPI-NOR). That applies to an ATAG boot; a
-device-tree kernel configured as recommended below ignores it.
+(avoid `saveenv`, which writes SPI-NOR). An appended-DTB kernel receives that
+command line when ATAG-to-DTB compatibility is enabled as described below.
 
 ## Getting a device tree into a modern kernel
 

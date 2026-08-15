@@ -164,6 +164,33 @@ There are two valid kernel handoffs:
 
 See [03-boot-chain.md](03-boot-chain.md) for the boot sequence.
 
+### Replacing the firmware framebuffer from U-Boot
+
+The vendor commands expose enough of the display path to show an arbitrary raw
+image without Linux:
+
+```
+startgx [layer addr stride x y w h]
+stopgx  [layer]
+startvo [dev type sync]
+stopvo  [dev]
+setvobg [dev color]
+decjpg
+```
+
+`startgx` has been validated with a separate ARGB1555 buffer. For a 1280x1024
+image at two bytes per pixel:
+
+```
+tftp 0xc2000000 image.raw
+startgx 0 0xc2000000 2560 0 0 1280 1024
+```
+
+The 2,621,440-byte little-endian ARGB1555 image appears immediately on the HD
+output. The input must be raw pixels, not a JPEG; `startgx` changes both the
+buffer address and layer geometry. The `decjpg` argument syntax has not been
+established.
+
 ## Assessment
 
 There is no complete mainline path, but the VDP itself is documented.

@@ -121,10 +121,11 @@ core refcounts the shared provider across EHCI and OHCI, replacing the vendor
 wrapper's manual open count.
 
 The reconciled Linux 6.18.42 port validated this arrangement. Both two-port
-root hubs enumerated, and a high-speed USB flash device on the front panel
-completed 512 MiB of dispersed write/readback testing without a reset,
-transport error or I/O error. No `hisilicon,hi3531-ehci` or
-`hisilicon,hi3531-ohci` compatible is needed.
+root hubs enumerated. A high-speed Flash Voyager sustained about 33 MB/s in
+both the front and rear sockets, and a full-speed FTDI serial adapter exercised
+the OHCI companion path. The flash drive also completed 512 MiB of dispersed
+write/readback testing without a reset, transport error or I/O error. No
+`hisilicon,hi3531-ehci` or `hisilicon,hi3531-ohci` compatible is needed.
 
 The source for the sequence is:
 

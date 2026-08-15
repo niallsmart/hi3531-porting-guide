@@ -47,19 +47,34 @@ pins are plain GPIO. See [19-pinmux-map.md](19-pinmux-map.md).
 | Features | `0x5/0xf` |
 | Attached to | `ata2` |
 
-Only one of the five multiplier ports has a drive:
+The observed topology is consistent with a direct mapping from multiplier
+ports to the board's first five SATA positions:
 
-| Multiplier port | State |
-|---|---|
-| `ata2.00` | Link down |
-| `ata2.01` | Link down |
-| `ata2.02` | **Link up, 1.5 Gbps — disk attached** |
-| `ata2.03` | Link down |
-| `ata2.04` | Link down |
+| Multiplier port | Board position | Hardware | State |
+|---|---|---|---|
+| `ata2.00` | SATA1 | Connector and coupling capacitors absent | Link down |
+| `ata2.01` | SATA2 | Connector and coupling capacitors absent | Link down |
+| `ata2.02` | SATA3 | Connector fitted, disk attached | **Link up, 1.5 Gbps** |
+| `ata2.03` | SATA4 | Connector fitted, empty | Link down |
+| `ata2.04` | SATA5 | Connector and coupling capacitors absent | Link down |
 
-The controller topology supports five drives on `ata2` plus one on `ata1`.
-The PCB has ten SATA footprints, but only two connectors are populated; usable
-expansion also depends on chassis power and cabling.
+The fitted SATA3 drive appearing at `ata2.02` supports this mapping. SATA4 has
+a connector and can accept a second drive, but its expected `ata2.03` mapping
+has not been verified with a drive. SATA1, SATA2 and SATA5 would need both
+connectors and their missing series AC-coupling capacitors. The second
+five-position group has no multiplier fitted at all.
+
+With the current single-drive configuration, the three link-down ports without
+connectors may be disabled:
+
+```
+libata.force=2.00:disable,2.01:disable,2.04:disable
+```
+
+This reduces enumeration by about 3.2 seconds while leaving `ata2.02` and
+`ata2.03` enabled. If SATA4 is populated, verify that it enumerates as
+`ata2.03` before retaining this override. The override does not remove the
+roughly 10.6 seconds spent waiting for the multiplier itself.
 
 ## Attached disk
 

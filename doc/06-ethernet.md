@@ -146,13 +146,31 @@ The kernel reports **both** `eth0` and `eth1` finding "PHY ID 001cc912 at 1",
 which is a quirk of the vendor driver scanning the same bus twice rather than
 evidence of two PHYs. Only one RTL8211CL is visible on the board.
 
-> **Mainline will call this PHY an RTL8211B, and that is fine.**
-> `drivers/net/phy/realtek/` matches `0x001cc912` exactly to its
-> "RTL8211B Gigabit Ethernet" entry; `0x001cc913` is the ID it calls RTL8211C.
-> The part on the board is marked RTL8211CL — photographed, `pcb/U67 RealTek
-> RTL8211CL.jpeg` — so expect the boot log to disagree with the silkscreen. A
-> driver binds either way and no PHY work is needed. Do not "fix" this by
-> forcing a different `compatible`.
+The PHY ID does not distinguish the B and C/CL variants. This RTL8211CL reports
+`0x001cc912`, an ID also used by RTL8211B parts. Mainline therefore binds its
+"RTL8211B Gigabit Ethernet" entry even though the package marking, confirmed in
+`pcb/U67 RealTek RTL8211CL.jpeg`, says RTL8211CL. The driver name in the boot
+log is not a hardware identification, and changing the device-tree compatible
+cannot resolve the ambiguity.
+
+This matters because mainline applies a gigabit slave-mode erratum only in its
+RTL8211C entry: `rtl8211c_config_init()` forces the PHY to be the 1000BASE-T
+master by setting `CTL1000_ENABLE_MASTER | CTL1000_AS_MASTER` in
+`MII_CTRL1000`. The RTL8211B entry selected here does not perform that setup.
+The link has been stable at 1 Gbps under sustained traffic, so no workaround is
+currently needed.
+
+If gigabit negotiation becomes unreliable or reports a master/slave resolution
+failure, first test the same setup at runtime with:
+
+```
+ethtool -s eth0 master-slave forced-master
+```
+
+If that fixes the problem, make it persistent by adding
+`timing-role = "forced-master";` to the PHY node. Phylib then programs the same
+two `MII_CTRL1000` bits during autonegotiation without pretending the shared
+PHY ID identifies a different chip.
 
 ### Interface mode
 

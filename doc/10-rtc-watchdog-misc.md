@@ -38,8 +38,10 @@ same read against UART0 and Timer0 returned `0x011` (PL011) and `0x804`
 (SP804), matching what [01-soc-overview.md](01-soc-overview.md) already
 established, which validates the method.
 
-So **mainline `wdt-sp805` applies directly** — a device-tree node with
-`compatible = "arm,sp805"` and the APB clock is all that is needed.
+Mainline `wdt-sp805` matches the register interface. A device-tree node with
+`compatible = "arm,sp805"` and the APB clock is sufficient to bind and operate
+the counter, but the SoC reset output needs additional integration described
+below.
 
 Like the GPIO blocks, the watchdog has a valid native PrimeCell identity and
 needs no `arm,primecell-periphid` override. See
@@ -71,6 +73,19 @@ system the two agree. Remember SP805 semantics when reasoning about the
 consequences: the first expiry raises an interrupt, and the reset only happens
 if a *second* expiry arrives with the first interrupt still outstanding. From
 the last kick that is 120 seconds, not 60.
+
+### Mainline reset routing remains unresolved
+
+Linux 6.18 validation confirmed that `wdt-sp805` binds and counts at the
+expected 3 MHz rate. Leaving it unserviced raises the first-stage raw interrupt
+(`WdogRIS = 1`), but the second expiry does not reset the SoC. The standard
+SP805 register interface is therefore correct; the missing piece is Hi3531
+reset routing outside the watchdog block.
+
+The vendor driver clears bit 23 through a separate mapping while configuring
+the watchdog, but the target register has not been identified. Until that
+integration is understood, do not rely on this watchdog to recover a hung
+mainline kernel.
 
 ### U-Boot disables it before booting Linux
 
