@@ -19,7 +19,7 @@ NAND or any yaffs2 filesystem.
 | `mode` | `comet` | `comet` = head plus a one-LED trail; `single` = one LED at a time |
 | `cycles` | `10` | Full left-right-left sweeps |
 | `delay` | `0.28` | Seconds between steps |
-| `host` | `192.168.4.77` | DVR address |
+| `host` | `dvr` | DVR hostname or address |
 
 Examples:
 

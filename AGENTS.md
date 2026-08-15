@@ -28,7 +28,7 @@ You have access to these assets:
 
 * Photos of the top-surface of the PCB (located in pcb/)
 
-* Live telnet access to the DVR on 192.168.4.77 with user root default password 1001chin
+* Live telnet access to the DVR at `dvr` with user root and default password `1001chin`
 
 * Live UART console access to the DVR, proxied through `raspberrypi` (use: `ssh -t raspberrypi "picocom -b 115200 --omap crcrlf --logfile dvr.log /dev/serial0"`).  This is helpful if you need to inspect the U-Boot console (press any key to interrupt the default boot)
 

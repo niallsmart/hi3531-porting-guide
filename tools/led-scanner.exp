@@ -15,7 +15,7 @@
 #   cycles  number of full left-right-left sweeps (default 10)
 #   delay   seconds between steps (default 0.28; busybox adds ~20 ms of
 #           loop overhead, so 0.28 lands at roughly 300 ms per step)
-#   host    DVR address (default 192.168.4.77)
+#   host    DVR hostname or address (default dvr)
 #
 # Notes:
 #   - The vendor application owns /dev/ttyAMA1 and will reassert its own LED
@@ -32,7 +32,7 @@
 set mode   [expr {$argc > 0 ? [lindex $argv 0] : "comet"}]
 set cycles [expr {$argc > 1 ? [lindex $argv 1] : 10}]
 set delay  [expr {$argc > 2 ? [lindex $argv 2] : 0.28}]
-set host   [expr {$argc > 3 ? [lindex $argv 3] : "192.168.4.77"}]
+set host   [expr {$argc > 3 ? [lindex $argv 3] : "dvr"}]
 set user   "root"
 set pass   "1001chin"
 set dev    "/dev/ttyAMA1"
