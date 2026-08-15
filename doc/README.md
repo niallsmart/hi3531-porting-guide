@@ -7,7 +7,10 @@ repurposed as a general-purpose server.
 
 This is reference material for a kernel developer. It documents what the
 hardware *is* and how the vendor firmware drives it. It does not attempt the
-port.
+port: that work lives in
+[dhb-ax-buildroot](https://github.com/niallsmart/dhb-ax-buildroot), and
+[the division between the two repositories](https://github.com/niallsmart/dhb-ax-buildroot/blob/main/doc/repository-split.md)
+sets out where a given change belongs.
 
 ## The short version
 
