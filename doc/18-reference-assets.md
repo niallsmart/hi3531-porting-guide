@@ -144,6 +144,12 @@ Two capture conditions affect how it reads:
 - **The front-panel MCU serial port failed to open** (`can not start the MCU
   serial port.`), so the log is unrepresentative downstream of the MCU.
 
+**Line boundaries in the capture are not line boundaries in the source.** The
+kernel, the shell scripts and the application's threads share one serial
+console without locking, so output interleaves, sometimes mid-word. Check
+anything quoted from this file against the binary before treating it as a
+literal.
+
 ## PCB photographs
 
 `pcb/` contains a 27 MB overview (`PCB.png`, also `PCB.heic`) plus labelled
