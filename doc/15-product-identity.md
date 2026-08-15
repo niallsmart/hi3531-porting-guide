@@ -92,7 +92,9 @@ the available material.
 Also visible on the overview photograph: the RTC coin cell (BT1), a buzzer
 (BZ1), four "HUI KE" relays for alarm outputs, the Ethernet
 magnetics module (`PM6C-1001A 1000BASE-T`, U6), a 2x10 header (CON1), the
-serial console header (J3), and **ten SATA connector footprints**
+serial console header (J3, silkscreened `UART0` — see
+[05-uart-console.md](05-uart-console.md#the-j3-header)), and **ten SATA
+connector footprints**
 (`SATA1`–`SATA10`) of which only two are populated.
 
 | Ref | Part | Function | Documented in |

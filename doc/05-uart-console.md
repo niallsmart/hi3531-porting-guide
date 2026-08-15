@@ -148,9 +148,27 @@ ssh -t raspberrypi "picocom -b 115200 --omap crcrlf --logfile dvr.log /dev/seria
 ```
 
 The Pi is at `192.168.4.34`, its serial port is `/dev/serial0` → `ttyAMA0`, and
-the user is in the `dialout` group. The exact pin header location on the DVR
-board has not been documented — see
-[16-open-questions.md](16-open-questions.md).
+the user is in the `dialout` group.
+
+### The J3 header
+
+UART0 is brought out on **J3**, silkscreened `UART0`, immediately to the right
+of the SoC heatsink. It ships unpopulated — this unit has header pins soldered
+in.
+
+It is a four-way header. Counting positions from the heatsink side:
+
+| Position | Signal |
+|---|---|
+| 1 | `GND` |
+| 2 | `TXD` |
+| 3 | `RXD` |
+| 4 | `VCC` |
+
+Signal direction is from the DVR's point of view, and is inferred from the
+working console wiring rather than from a silkscreen. Only the two data lines
+and a ground are needed; leave `VCC` unconnected unless the far end has no
+supply of its own.
 
 Only one process may hold `/dev/serial0` at a time, so stop picocom before
 running anything else against the port.

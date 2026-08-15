@@ -19,14 +19,11 @@ Ranked by how much they would change the work.
    [15-product-identity.md](15-product-identity.md)).
 3. **A flash programmer (CH341A + SOIC-8 clip) for recovery.** Not needed while
    the no-flash-writes rule holds, but essential before the first flash write.
-4. **The serial console pin header location.** The UART pinout is known and the
-   console works; where the header sits on the board is not recorded. See
-   [05-uart-console.md](05-uart-console.md).
-5. **The identity of `U16`.** A 56-pin TI part beside the VGA and HDMI
+4. **The identity of `U16`.** A 56-pin TI part beside the VGA and HDMI
    connectors, marked `PN521` / `35KG4` / `AL2R`. The marking does not resolve
    to a confirmed part number; identifying it needs a TI marking
    cross-reference. Not on any path a server build depends on.
-6. **The FPGA's I²C address and register map**, and what its bitstream
+5. **The FPGA's I²C address and register map**, and what its bitstream
    implements. Only matters if the video capture path is ever revived.
    Recoverable by tracing the bit-banged I²C bus — see
    [11-video-input.md](11-video-input.md#a-possible-route-to-capture-on-a-modern-kernel).
