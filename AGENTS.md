@@ -34,6 +34,8 @@ You have access to these assets:
 
 * Live UART console access to the DVR, proxied through `raspberrypi` (use: `ssh -t raspberrypi "picocom -b 115200 --omap crcrlf --logfile dvr.log /dev/serial0"`).  This is helpful if you need to inspect the U-Boot console (press any key to interrupt the default boot)
 
+* The sibling repository `../dhb-ax-buildroot/`, which holds the actual port: Buildroot config, device trees, kernel patch queue and board tooling. It is where the porting work happens; this repository documents the hardware it runs on. Its results are first-hand evidence — a driver that binds and a peripheral that works there settle questions this repository can only infer. When the two disagree, the port is usually right and the guide should be corrected.
+
 # Evidence and Inference
 
 Most errors in this documentation came from treating a plausible label as a fact. Know which source a claim rests on:
@@ -47,7 +49,7 @@ Most errors in this documentation came from treating a plausible label as a fact
 Three rules follow:
 
 * **Read the write, not the comment.** Vendor comments here have been systematically shifted (37 wrong GPIO numbers), copy-pasted, and flatly contradicted by the line they annotate — `dep2.sh` writes `0x200f004c` under `#set default buzzer gpio control`, and the value it writes takes the pin *out* of GPIO mode.
-* **A dump is a timestamp, not a configuration.** 44 of the 128 pinmux registers captured in U-Boot differ under the running kernel. Say where every dump was taken.
+* **A dump is a timestamp, not a configuration.** 44 of the 128 pinmux registers captured in U-Boot differ under the running kernel. Say where every dump was taken. The board now boots either the vendor 3.0.8 kernel or the mainline port, so run `uname -r` before reading anything live and record which one you were on.
 * **Label anything inferred**, and check whether another file in `doc/` already says the opposite.
 
 # Permissions
