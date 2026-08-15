@@ -1,8 +1,9 @@
-# Hi3531 DVR — Hardware Documentation
+# DHB_AX Hardware Documentation
 
-Hardware documentation for an **LTS LTD2704XE-P** digital video recorder, built
-on a HiSilicon Hi3531 SoC, prepared to support porting a modern Linux kernel so
-the unit can be repurposed as a general-purpose server.
+Hardware documentation for the TVT Digital **`DHB_AX V1.2`** board, built on a
+HiSilicon Hi3531 SoC and sold as the **LTS LTD2704XE-P** digital video
+recorder, prepared to support porting a modern Linux kernel so the unit can be
+repurposed as a general-purpose server.
 
 This is reference material for a kernel developer. It documents what the
 hardware *is* and how the vendor firmware drives it. It does not attempt the
@@ -12,16 +13,18 @@ port.
 
 | | |
 |---|---|
+| **Board** | TVT Digital `DHB_AX V1.2`, sold as the LTS LTD2704XE-P |
 | **SoC** | HiSilicon Hi3531 V100 — dual-core Cortex-A9, ARMv7, ~1 GHz |
-| **RAM** | ~1 GB across two DDR controllers — but Linux is given only 224 MB |
+| **RAM** | ~1 GB across two DDR controllers — the vendor firmware gives Linux only 224 MB |
 | **Storage** | 2 MB SPI-NOR (U-Boot), 128 MB NAND (kernel + rootfs), 1 TB SATA disk |
 | **Network** | Gigabit — Synopsys DWMAC1000 + Realtek RTL8211CL |
 | **Firmware** | U-Boot 2010.06 (2012), Linux 3.0.8 (2013), HiSilicon MPP V1.0.7.3 |
-| **ODM** | TVT Digital — LTS is a rebadger |
 
-**The project looks viable.** CPU, memory, UART, Ethernet and SATA use
-conventional IP. The main constraints are the unusual DRAM layout, the lack of
-mainline flash-controller drivers, and the closed media stack. See
+CPU, memory, UART, Ethernet and SATA use conventional IP, and mainline Linux
+runs on the board today — see the
+[port](https://github.com/niallsmart/dhb-ax-buildroot) for what is working.
+The remaining constraints are the unusual DRAM layout, the lack of mainline
+flash-controller drivers, and the closed media stack. See
 [Memory Map](02-memory-map.md), [Porting Roadmap](16-porting-roadmap.md), and
 [Media Codec](14-media-codec.md).
 
