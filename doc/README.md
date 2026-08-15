@@ -47,7 +47,7 @@ mainline flash-controller drivers, and the closed media stack. See
 
 | # | Document | Contents |
 |---|---|---|
-| 11 | [Video Input](11-video-input.md) | Nextchip decoder, Lattice FPGA, BT.1120 into the VIU |
+| 11 | [Video Input](11-video-input.md) | Nextchip decoder, Lattice FPGA, BT.1120 into the VIU, a possible capture route |
 | 12 | [Video Output](12-video-output.md) | Integrated VGA, HDMI and dual CVBS paths, framebuffer layers |
 | 13 | [Audio](13-audio.md) | NVP1104B codec, SIO/I²S, what is unconfirmed |
 | 14 | [Media Codec — Why This Is a Dead End](14-media-codec.md) | The MPP stack and why it cannot be ported |
@@ -56,10 +56,10 @@ mainline flash-controller drivers, and the closed media stack. See
 
 | # | Document | Contents |
 |---|---|---|
-| 15 | [Product Identity](15-product-identity.md) | TVT as the ODM, chassis label, component inventory |
+| 15 | [Product Identity](15-product-identity.md) | TVT as the ODM, chassis label, component inventory, the `productID` chain, build provenance |
 | 16 | [Porting Roadmap and Open Questions](16-porting-roadmap.md) | Phased plan, open questions, risks |
 | 17 | [Live Register Dumps](17-register-dumps.md) | Pinmux, CRG, SYS_CTRL and DDR controller dumps from the running board |
-| 18 | [Reference Assets and Capture Methods](18-reference-assets.md) | SDK layout, SDK verification, live access, pitfalls |
+| 18 | [Reference Assets and Capture Methods](18-reference-assets.md) | SDK layout, SDK verification, live access, boot console capture, pitfalls |
 | 19 | [Pin Multiplexing Map](19-pinmux-map.md) | All 151 IO_CONFIG registers from the chip datasheet, with what this board selects |
 | 21 | [PCI Express](21-pcie.md) | Two unused root complexes and the vendor cascade feature |
 | — | [Raspberry Pi Configuration Log](raspberrypi-changes.md) | Changes made to the serial-proxy host |

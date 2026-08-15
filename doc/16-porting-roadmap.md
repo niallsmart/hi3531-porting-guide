@@ -158,6 +158,8 @@ Ranked by how much they would change the work.
    cross-reference. Not on any path a server build depends on.
 5. **The FPGA's I²C address and register map**, and what its bitstream
    implements. Only matters if the video capture path is ever revived.
+   Recoverable by tracing the bit-banged I²C bus — see
+   [11-video-input.md](11-video-input.md#a-possible-route-to-capture-on-a-modern-kernel).
 
 ## Out of scope
 
