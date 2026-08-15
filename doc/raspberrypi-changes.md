@@ -28,9 +28,6 @@ TFTP is usable for netbooting test kernels: place an image in `/srv/tftp` and
 fetch it from U-Boot with `serverip=192.168.4.34`. See
 [03-boot-chain.md](03-boot-chain.md).
 
-`/home/niallsmart/dhb_ax/backups/2026-08-03/` holds the second copy of the DVR
-flash backups.
-
 ## Changes made (2026-08-12)
 
 ### Installed `python3-serial` (3.5-2)

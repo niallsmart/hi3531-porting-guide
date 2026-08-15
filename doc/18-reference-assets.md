@@ -112,8 +112,7 @@ generation, and those are what a port needs.
 
 See [04-flash-storage.md](04-flash-storage.md) for contents and geometry.
 `backups/2026-08-03/MANIFEST.md` carries SHA-256 for every file; each layer was
-read twice and compared, with a second copy on the Pi at
-`/home/niallsmart/dhb_ax/backups/2026-08-03/`.
+read twice and compared.
 
 ## Boot console capture
 

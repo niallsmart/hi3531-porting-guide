@@ -161,9 +161,7 @@ Under the no-flash-writes constraint, options 1 and 2 are the available routes.
 The raw NAND image is exactly 65,536 pages × (2048 + 64) bytes = 138,412,032
 bytes, confirming it is a complete page+OOB dump at the stated geometry.
 
-Each layer was read twice and compared, SHA-256 recorded in `MANIFEST.md`, with
-a second copy on the Raspberry Pi at
-`/home/niallsmart/dhb_ax/backups/2026-08-03/`.
+Each layer was read twice and compared, SHA-256 recorded in `MANIFEST.md`.
 
 > **Restoring these requires hardware.** The images are safe, but writing them
 > back to a bricked board needs a SPI flash programmer (e.g. CH341A with a
