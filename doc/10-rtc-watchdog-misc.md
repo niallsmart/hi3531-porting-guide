@@ -16,7 +16,7 @@ has its own file: [20-front-panel-mcu.md](20-front-panel-mcu.md).
 |---|---|
 | Register base | `0x20040000` |
 | IP | **ARM SP805** — confirmed, see below |
-| Mainline driver | `wdt-sp805`, compatible `arm,sp805` |
+| Mainline driver | `sp805-wdt`, compatible `arm,sp805` |
 | Vendor driver | `wdt.ko`, version `201206151658` |
 | Kernel driver banner | `Hisilicon Watchdog Timer: 0.01 initialized` |
 | Vendor driver default margin | 60 seconds (a module parameter, not a hardware property) |
@@ -38,7 +38,7 @@ same read against UART0 and Timer0 returned `0x011` (PL011) and `0x804`
 (SP804), matching what [01-soc-overview.md](01-soc-overview.md) already
 established, which validates the method.
 
-Mainline `wdt-sp805` matches the register interface. A device-tree node with
+Mainline `sp805-wdt` matches the register interface. A device-tree node with
 `compatible = "arm,sp805"` and the APB clock is sufficient to bind and operate
 the counter, but the SoC reset output needs additional integration described
 below.
@@ -76,7 +76,7 @@ the last kick that is 120 seconds, not 60.
 
 ### Mainline reset routing remains unresolved
 
-Linux 6.18 validation confirmed that `wdt-sp805` binds and counts at the
+Linux 6.18 validation confirmed that `sp805-wdt` binds and counts at the
 expected 3 MHz rate. Leaving it unserviced raises the first-stage raw interrupt
 (`WdogRIS = 1`), but the second expiry does not reset the SoC. The standard
 SP805 register interface is therefore correct; the missing piece is Hi3531

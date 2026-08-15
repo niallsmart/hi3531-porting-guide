@@ -150,20 +150,12 @@ remembering:
 
 ## Role in the port
 
-The recommended TFTP-kernel/SATA-root workflow is in
-[16-porting-roadmap.md](16-porting-roadmap.md).
-
-Neither flash controller has a mainline driver. A SATA root would avoid both,
-but it is not required for bring-up:
-
-- Keep the vendor U-Boot in SPI-NOR untouched.
-- Keep the vendor kernel in NAND untouched, so the DVR firmware remains
-  bootable as a fallback.
-- Put the root filesystem on SATA only when the disk contents may be replaced,
-  or use an NFS root while preserving the recordings.
-
-This gives a reversible, low-risk path to a working general-purpose system.
-See [16-porting-roadmap.md](16-porting-roadmap.md).
+Neither flash controller has a mainline driver, so a root filesystem on this
+disk avoids both. The port takes that route: it roots on SATA and leaves the
+vendor U-Boot in SPI-NOR and the vendor kernel in NAND untouched, so the DVR
+firmware stays bootable as a fallback. An NFS root is the alternative where the
+recorded video must be preserved. See
+[dhb-ax-buildroot](https://github.com/niallsmart/dhb-ax-buildroot).
 
 ## U-Boot cannot read the SATA disk
 

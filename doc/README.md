@@ -28,7 +28,7 @@ runs on the board today — see the
 [port](https://github.com/niallsmart/dhb-ax-buildroot) for what is working.
 The remaining constraints are the unusual DRAM layout, the lack of mainline
 flash-controller drivers, and the closed media stack. See
-[Memory Map](02-memory-map.md), [Porting Roadmap](16-porting-roadmap.md), and
+[Memory Map](02-memory-map.md), [Open Questions](16-open-questions.md), and
 [Media Codec](14-media-codec.md).
 
 ## Table of contents
@@ -63,7 +63,7 @@ flash-controller drivers, and the closed media stack. See
 | # | Document | Contents |
 |---|---|---|
 | 15 | [Product Identity](15-product-identity.md) | TVT as the ODM, chassis label, component inventory, the `productID` chain, build provenance |
-| 16 | [Porting Roadmap and Open Questions](16-porting-roadmap.md) | Phased plan, open questions, risks |
+| 16 | [Open Questions](16-open-questions.md) | What is still unknown, the unattended-boot gap, what this set does not cover |
 | 17 | [Live Register Dumps](17-register-dumps.md) | Pinmux, CRG, SYS_CTRL and DDR controller dumps from the running board |
 | 18 | [Reference Assets and Capture Methods](18-reference-assets.md) | SDK layout, SDK verification, live access, boot console capture, pitfalls |
 | 19 | [Pin Multiplexing Map](19-pinmux-map.md) | All 151 IO_CONFIG registers from the chip datasheet, with what this board selects |
@@ -74,13 +74,16 @@ flash-controller drivers, and the closed media stack. See
 
 A developer picking this up should read, in order:
 
-1. [Porting Roadmap](16-porting-roadmap.md) — the plan and what is unknown
-2. [SoC Overview](01-soc-overview.md) — the register map for the device tree
-3. [Memory Map](02-memory-map.md) — the memory prize and how to claim it
-4. [Boot Chain](03-boot-chain.md) — how to load a test kernel without risk
+1. [SoC Overview](01-soc-overview.md) — the register map for the device tree
+2. [Memory Map](02-memory-map.md) — both DRAM banks and how to reach them
+3. [Boot Chain](03-boot-chain.md) — how to load a kernel without risk
+4. [Open Questions](16-open-questions.md) — what is still unknown
 
 Then [Ethernet](06-ethernet.md) and [SATA](07-sata-storage.md), which are the
 two drivers that make the machine useful.
+
+For the working implementation of all of the above, see
+[dhb-ax-buildroot](https://github.com/niallsmart/dhb-ax-buildroot).
 
 ## Confidence and gaps
 
@@ -97,5 +100,4 @@ The remaining gaps, in order of impact:
 | **`U16` is unidentified** | A 56-pin TI part beside the VGA/HDMI connectors. Not on any path a server build depends on. |
 | **No full NVP1104B datasheet or register map** | Blocks the external video decoder and its integrated audio codec. |
 
-Full detail on gaps and next steps is in
-[Porting Roadmap and Open Questions](16-porting-roadmap.md).
+Full detail on these gaps is in [Open Questions](16-open-questions.md).

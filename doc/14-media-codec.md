@@ -95,6 +95,6 @@ Realistic options, none of which involve this hardware:
 - **Keep the vendor firmware.** If the DVR function matters more than the server
   function, the original firmware is intact in NAND and fully backed up. The
   board can be returned to it at any time.
-- **Dual-boot.** Since the port is planned to live on the SATA disk with NAND
-  untouched (see [16-porting-roadmap.md](16-porting-roadmap.md)), both remain
+- **Dual-boot.** The port lives on the SATA disk with NAND untouched (see
+  [07-sata-storage.md](07-sata-storage.md#role-in-the-port)), so both remain
   available by changing U-Boot's boot command.

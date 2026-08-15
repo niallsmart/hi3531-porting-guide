@@ -150,7 +150,7 @@ ssh -t raspberrypi "picocom -b 115200 --omap crcrlf --logfile dvr.log /dev/seria
 The Pi is at `192.168.4.34`, its serial port is `/dev/serial0` → `ttyAMA0`, and
 the user is in the `dialout` group. The exact pin header location on the DVR
 board has not been documented — see
-[16-porting-roadmap.md](16-porting-roadmap.md).
+[16-open-questions.md](16-open-questions.md).
 
 Only one process may hold `/dev/serial0` at a time, so stop picocom before
 running anything else against the port.
