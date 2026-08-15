@@ -31,18 +31,6 @@ Ranked by how much they would change the work.
    Recoverable by tracing the bit-banged I²C bus — see
    [11-video-input.md](11-video-input.md#a-possible-route-to-capture-on-a-modern-kernel).
 
-## No unattended boot path
-
-This board cannot boot without either writing flash or leaving USB media
-attached. The constraint is the bootloader's, not the hardware's:
-
-| Route | Status |
-|---|---|
-| USB (`usbboot`, `fatload usb`) | Works. Weigh the `do_auto_update` risk before leaving media attached — see [03-boot-chain.md](03-boot-chain.md) |
-| TFTP | Works, and needs a host reachable at boot |
-| SATA | Not possible. This U-Boot has no `sata`, `scsi` or `ide` command, and `ext2load`/`fatload` address only `usb` — see [07-sata-storage.md](07-sata-storage.md#u-boot-cannot-read-the-sata-disk) |
-| Kernel in NAND or SPI-NOR | Forbidden under the no-flash-writes rule; needs a programmer on hand first |
-
 ## Out of scope
 
 Not documented beyond what appears elsewhere in this set: the internals of the

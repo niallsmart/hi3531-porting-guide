@@ -63,7 +63,7 @@ flash-controller drivers, and the closed media stack. See
 | # | Document | Contents |
 |---|---|---|
 | 15 | [Product Identity](15-product-identity.md) | TVT as the ODM, chassis label, component inventory, the `productID` chain, build provenance |
-| 16 | [Open Questions](16-open-questions.md) | What is still unknown, the unattended-boot gap, what this set does not cover |
+| 16 | [Open Questions](16-open-questions.md) | What is still unknown, and what this set does not cover |
 | 17 | [Live Register Dumps](17-register-dumps.md) | Pinmux, CRG, SYS_CTRL and DDR controller dumps from the running board |
 | 18 | [Reference Assets and Capture Methods](18-reference-assets.md) | SDK layout, SDK verification, live access, boot console capture, pitfalls |
 | 19 | [Pin Multiplexing Map](19-pinmux-map.md) | All 151 IO_CONFIG registers from the chip datasheet, with what this board selects |
