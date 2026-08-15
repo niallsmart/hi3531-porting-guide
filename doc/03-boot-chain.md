@@ -241,7 +241,7 @@ in r2.
 | Kernel option | Setting |
 |---|---|
 | `CONFIG_ARM_APPENDED_DTB` | **y** |
-| `CONFIG_ARM_ATAG_DTB_COMPAT` | **n** — see below, this one matters |
+| `CONFIG_ARM_ATAG_DTB_COMPAT` | **n**, or **y** with the explicit memory override below |
 
 `ARM_APPENDED_DTB` lives in the decompressor, so the image has to be a
 **zImage**, not the uncompressed `Image` the vendor ships:
@@ -255,10 +255,9 @@ mkimage -A arm -O linux -T kernel -C none \
 
 The load address has to sit clear of where the kernel decompresses to
 (`0x80008000`); `0x82000000` is the address the vendor `bootcmd` already uses as
-a staging area, so it is known good for `bootm`. Untested end to end — nothing
-here has booted a mainline kernel.
+a staging area, so it is known good for `bootm`.
 
-### Leave `ARM_ATAG_DTB_COMPAT` off, or lose three quarters of the RAM
+### Disable ATAG compatibility or override its memory map
 
 It looks like the helpful option — it is what the "old bootloader" case is for —
 but on this board it silently reimposes the vendor's memory limit. It is the
@@ -289,6 +288,20 @@ DTB's address and the ATAG list is never read. The device tree's `/memory` and
 The cost is that `setenv bootargs` at the U-Boot prompt stops doing anything, so
 the command line has to be edited in the device tree and the image rebuilt.
 During bring-up that is a rebuild you are doing anyway.
+
+An alternative validated by the Linux 6.18 port is to enable
+`CONFIG_ARM_ATAG_DTB_COMPAT_CMDLINE_FROM_BOOTLOADER`, replace U-Boot's vendor
+command line before `bootm`, and include the measured banks explicitly:
+
+```
+mem=512M@0x80000000 mem=512M@0xc0000000
+```
+
+The first `mem=` makes `early_mem()` discard the memory map derived from the
+incorrect `ATAG_MEM`; the two arguments then add the real banks. This retains
+volatile U-Boot `root=` selection while preventing either vendor memory limit
+from surviving. Replace the old command line rather than extending its
+`mem=224M` value.
 
 ### `machid` does not matter here
 
