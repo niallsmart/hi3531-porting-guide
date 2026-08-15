@@ -173,11 +173,32 @@ likely for a DVR of this class, but this has not been confirmed.
 Two control paths exist:
 
 - **I²C**, via the shared bit-banged bus. The FPGA's I²C address was not
-  captured at runtime.
+  captured at runtime. The configuration code lives in userspace, in TVT's
+  `libhi3531.so`, which exports `EXDRV_FPGA_Device_Open`,
+  `EXDRV_FPGA_I2C_RW_Data`, `EXDRV_ConfigFpgaForLiveVi`,
+  `SDVR_GetVideoLossForFPGA` and `xvfunc_gpioi2c_config_fpga_live_vi`, and
+  carries the error strings `FPGA i2c read fail` / `FPGA i2c write fail`. So
+  the FPGA is configured for live-view channel routing and queried for video
+  loss, both over I²C, from the application rather than from a kernel driver.
 - **JTAG**, via `fpga_jtag.ko`, which bit-bangs TCK/TMS/TDI/TDO on GPIO pins.
   The presence of a JTAG bit-bang driver in the shipping firmware strongly
   suggests the **bitstream is loaded at runtime by the host**, rather than from
   a dedicated configuration flash.
+
+> **`fpga_jtag.ko` is never loaded on this board.** `load3531` inserts it only
+> under `SDK_TYPE=8720p` (line 155), and `dep2.sh` selects `4hd` here because
+> `bootargs` contains the partition name `32M(hdr000000)` and the script greps
+> `/proc/cmdline` for `(hdr`. `load3531` is the only file in the entire rootfs
+> that references `fpga_jtag`, and `td3531` contains no reference to
+> `/dev/fpgasdi`. The misc device that `fpga_jtag.ko` registers therefore never
+> exists on this unit, and `libhi3531.so`'s FPGA path — which opens
+> `/dev/fpgasdi` — is dead code here.
+>
+> The bitstream is therefore not host-loaded on this board, and the JTAG
+> inference above applies only to the 8720p variant. Two possibilities remain
+> open: the FPGA self-configures from a dedicated configuration source at
+> power-up and needs no runtime setup on a 4HD board, or the live-view routing
+> calls fail silently and the FPGA runs in a fixed default mode.
 
 ### The bitstream
 
@@ -307,3 +328,40 @@ for the datasheet coverage map.
 
 For the server use case, the correct action is to leave the video input
 hardware unconfigured. It consumes no resources if its drivers are not loaded.
+
+## A possible route to capture on a modern kernel
+
+**Unexplored. Recorded as a direction for future work.**
+
+The two obstacles in the table above are gaps in documentation rather than in
+what can be observed. Both chips are configured over the same bit-banged I²C
+bus, and the stock firmware configures them correctly on every boot, so the
+byte sequences that work on this board can be recovered by capturing them:
+
+- Instrument `gpio_i2c_write` and `gpio_i2c_read` under the stock 3.0.8 kernel
+  and log every transaction while the firmware brings video up. Source for the
+  bus driver is in the SDK at `mpp/extdrv/gpio_i2c_8b/`, so it can be rebuilt
+  with logging added.
+- Or capture the bus with a logic analyser on the SCL/SDA pins.
+
+That yields the NVP1104B initialisation sequence and, if the FPGA is addressed
+at all on this board (see the note under [Its role](#its-role)), its
+configuration writes.
+
+With those in hand, a capture path on a mainline kernel becomes conceivable:
+
+| Piece | Status |
+|---|---|
+| VICAP register programming | Documented — chapter 11.1, ~85 pages |
+| NVP1104B setup | Recoverable by I²C tracing |
+| FPGA setup | Recoverable by I²C tracing, if it is configured at runtime at all |
+| Encoding | **Not available.** VEDU has no register documentation (chapter 7.2 is functional description only), so H.264 encode stays locked to MPP |
+
+Encoding would have to be software on the Cortex-A9 pair — plausible for one or
+two channels at D1, out of reach for 4x1080p.
+
+Note the shape of the datasheet's coverage: the blocks at the edges of the
+pipeline — VICAP in (11.1), VDP out (11.2) — have full register manuals, while
+everything that transforms or compresses in between (VEDU 7.2, VDH 6.1, VPSS
+8.2, TDE 8.1) has functional description only. Pixels in and pixels out are
+documented; the parts that would let MPP be replaced are not.
