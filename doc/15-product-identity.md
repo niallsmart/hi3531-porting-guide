@@ -14,7 +14,7 @@ Evidence, all from the running device:
 | Shared library | `libhi3531.so` (1.9 MB) |
 | CryptoMemory driver banner | `TVT 35xx CryptoMemory Device Driver v1.0.0` |
 | Application version string | `version:2012030908580+->TD3515` |
-| Internal product code | `Current 2704XD_P` |
+| Internal product code | `2704XD_P` |
 | PCB designation | `DHB_AX` — silkscreen only, absent from all firmware |
 
 **This matters for the port.** TVT-manufactured DVRs are sold under many brands
