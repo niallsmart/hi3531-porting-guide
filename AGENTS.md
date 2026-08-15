@@ -9,7 +9,9 @@ This project supports the porting effort by documenting the hardware, such that 
 
 Documentation should be stored as markdown in the doc/ subfolder. The README.md provides a summary and table of contents. Separate markdown files document each subsystem.
 
-You don't need to record the history of your investigations and research in the documentation, or a Changelog as you refined your understanding. Just state the final conclusions and what you know at the end.
+Write conclusions, not derivations. The docs record what is true and where it came from, never how it was worked out. Keep provenance — which source a claim rests on, and whether it is inferred — and cut everything else about the process: alternatives you ruled out, the order evidence arrived in, discovery framing, examples that argue rather than inform, and commentary on the document itself.
+
+Test: if a sentence would need rewriting once the fact is old news, it is about the investigation rather than the subject.
 
 Store local copies of any relevant datasheets in datasheets/
 
